@@ -1255,3 +1255,43 @@ func TestLabelGrowMovesArrows(t *testing.T) {
 		t.Fatal("the label should be in the yaml")
 	}
 }
+
+func TestCleanCrossings(t *testing.T) {
+	st := 1 // line style
+	objs := []object{
+		{Kind: "box", X0: 0, Y0: 0, X1: 6, Y1: 4, Style: st},
+		{Kind: "box", X0: 3, Y0: 2, X1: 9, Y1: 6, Style: st},
+	}
+	got := compose(objs).String()
+	want := "┌─────┐\n│     │\n│  ┌──┼──┐\n│  │  │  │\n└──┼──┘  │\n   │     │\n   └─────┘\n"
+	if got != want {
+		t.Fatalf("overlapping boxes:\n%s\nwant:\n%s", got, want)
+	}
+	// A line that stops on a box edge makes a tee; one that leaves it, too.
+	objs = []object{
+		{Kind: "box", X0: 4, Y0: 0, X1: 10, Y1: 4, Style: st},
+		{Kind: "line", X0: 0, Y0: 2, X1: 4, Y1: 2, Style: st},
+		{Kind: "line", X0: 7, Y0: 4, X1: 7, Y1: 6, Style: st},
+	}
+	got = compose(objs).String()
+	want = "    ┌─────┐\n    │     │\n────┤     │\n    │     │\n    └──┬──┘\n       │\n       │\n"
+	if got != want {
+		t.Fatalf("tees:\n%s\nwant:\n%s", got, want)
+	}
+	// An arrowhead sits on top; it doesn't join.
+	objs = []object{
+		{Kind: "box", X0: 4, Y0: 0, X1: 10, Y1: 4, Style: st},
+		{Kind: "arrow", X0: 0, Y0: 2, X1: 4, Y1: 2, Style: st},
+	}
+	if got := compose(objs).String(); !strings.Contains(got, "───>     │") {
+		t.Fatalf("arrowhead:\n%s", got)
+	}
+	// ASCII joins with +.
+	objs = []object{
+		{Kind: "line", X0: 0, Y0: 1, X1: 4, Y1: 1},
+		{Kind: "line", X0: 2, Y0: 0, X1: 2, Y1: 2},
+	}
+	if got := compose(objs).String(); got != "  |\n--+--\n  |\n" {
+		t.Fatalf("ascii cross: %q", got)
+	}
+}

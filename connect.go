@@ -146,16 +146,11 @@ func (o object) route() [][2]int {
 	}
 }
 
-// drawPath draws straight runs between the points, with a corner wherever
-// the path turns. arrow puts a head on the last point.
+// drawPath draws straight runs between the points, turning a corner
+// wherever the path turns. Each cell gets arms toward the cells before and
+// after it, so the ends only point back along the line, and a line that
+// stops on a box edge joins it as a tee. arrow puts a head on the end.
 func drawPath(c *canvas, pts [][2]int, st boxStyle, arrow bool) {
-	// Drop repeated points, so every run has a direction.
-	var p [][2]int
-	for _, q := range pts {
-		if len(p) == 0 || p[len(p)-1] != q {
-			p = append(p, q)
-		}
-	}
 	sign := func(v int) int {
 		switch {
 		case v > 0:
@@ -165,50 +160,56 @@ func drawPath(c *canvas, pts [][2]int, st boxStyle, arrow bool) {
 		}
 		return 0
 	}
-	dir := func(a, b [2]int) [2]int { return [2]int{sign(b[0] - a[0]), sign(b[1] - a[1])} }
-	for k := 0; k+1 < len(p); k++ {
-		d := dir(p[k], p[k+1])
-		r := st.h
-		if d[0] == 0 {
-			r = st.v
-		}
-		for q := p[k]; ; q = [2]int{q[0] + d[0], q[1] + d[1]} {
-			c.set(q[0], q[1], r)
-			if q == p[k+1] {
-				break
-			}
-		}
-	}
-	// Corners. A corner joins the side the path came from and the side it
-	// leaves by.
-	for k := 1; k+1 < len(p); k++ {
-		in, out := dir(p[k-1], p[k]), dir(p[k], p[k+1])
-		if in == out {
+	// Every cell along the path, in order.
+	var cells [][2]int
+	for k, q := range pts {
+		if k == 0 {
+			cells = append(cells, q)
 			continue
 		}
-		from := [2]int{-in[0], -in[1]} // the neighbor it came from
-		left, up := from[0] < 0 || out[0] < 0, from[1] < 0 || out[1] < 0
-		switch {
-		case left && up:
-			c.set(p[k][0], p[k][1], st.br)
-		case left:
-			c.set(p[k][0], p[k][1], st.tr)
-		case up:
-			c.set(p[k][0], p[k][1], st.bl)
-		default:
-			c.set(p[k][0], p[k][1], st.tl)
+		p := cells[len(cells)-1]
+		dx, dy := sign(q[0]-p[0]), sign(q[1]-p[1])
+		for p != q {
+			p = [2]int{p[0] + dx, p[1] + dy}
+			cells = append(cells, p)
 		}
 	}
-	if arrow && len(p) > 0 {
-		last := p[len(p)-1]
+	toward := func(from, to [2]int) uint8 {
+		switch {
+		case to[0] > from[0]:
+			return armR
+		case to[0] < from[0]:
+			return armL
+		case to[1] > from[1]:
+			return armD
+		case to[1] < from[1]:
+			return armU
+		}
+		return 0
+	}
+	for k, p := range cells {
+		var arms uint8
+		if k > 0 {
+			arms |= toward(p, cells[k-1])
+		}
+		if k+1 < len(cells) {
+			arms |= toward(p, cells[k+1])
+		}
+		if arms == 0 { // a path one cell long
+			arms = armL | armR
+		}
+		c.line(p[0], p[1], arms, st)
+	}
+	if arrow && len(cells) > 0 {
+		last := cells[len(cells)-1]
 		head := '>'
-		if len(p) > 1 {
-			switch dir(p[len(p)-2], last) {
-			case [2]int{-1, 0}:
+		if len(cells) > 1 {
+			switch toward(cells[len(cells)-2], last) {
+			case armL:
 				head = '<'
-			case [2]int{0, 1}:
+			case armD:
 				head = 'v'
-			case [2]int{0, -1}:
+			case armU:
 				head = '^'
 			}
 		}

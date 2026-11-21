@@ -46,7 +46,7 @@ under a third heading, "Widgets".
 
 ## 6. Clean crossings
 
-- [ ] Where lines meet, draw `┼ ├ ┬` (or `+` in ASCII) instead of letting
+- [x] Where lines meet, draw `┼ ├ ┬` (or `+` in ASCII) instead of letting
       one shape overwrite the other.
 
 ## 7. Smaller things

@@ -6,9 +6,18 @@ import "strings"
 // cell, so the mouse can find the object under it.
 type canvas struct {
 	rows [][]rune
-	own  [][]int // object index + 1; 0 means nothing
-	pen  int     // owner recorded by set
+	own  [][]int   // object index + 1; 0 means nothing
+	arm  [][]uint8 // for line cells, which ways the line runs; see line
+	pen  int       // owner recorded by set
 }
+
+// Arms: the directions a line leaves a cell by.
+const (
+	armU uint8 = 1 << iota
+	armD
+	armL
+	armR
+)
 
 func (c *canvas) get(x, y int) rune {
 	if y < 0 || y >= len(c.rows) || x < 0 || x >= len(c.rows[y]) {
@@ -25,20 +34,44 @@ func (c *canvas) owner(x, y int) int {
 	return c.own[y][x] - 1
 }
 
-func (c *canvas) set(x, y int, r rune) {
-	if x < 0 || y < 0 {
-		return
-	}
+func (c *canvas) grow(x, y int) {
 	for len(c.rows) <= y {
 		c.rows = append(c.rows, nil)
 		c.own = append(c.own, nil)
+		c.arm = append(c.arm, nil)
 	}
 	for len(c.rows[y]) <= x {
 		c.rows[y] = append(c.rows[y], ' ')
 		c.own[y] = append(c.own[y], 0)
+		c.arm[y] = append(c.arm[y], 0)
 	}
+}
+
+// set puts a plain character in a cell, over whatever was there.
+func (c *canvas) set(x, y int, r rune) {
+	if x < 0 || y < 0 {
+		return
+	}
+	c.grow(x, y)
 	c.rows[y][x] = r
 	c.own[y][x] = c.pen
+	c.arm[y][x] = 0
+}
+
+// line puts a piece of line in a cell. Where it lands on another shape's
+// line, the two join: a line crossing a box edge makes ┼, one ending on it
+// makes ├ or ┤. Within one shape, the newer piece replaces the older.
+func (c *canvas) line(x, y int, arms uint8, st boxStyle) {
+	if x < 0 || y < 0 {
+		return
+	}
+	c.grow(x, y)
+	if old := c.arm[y][x]; old != 0 && c.own[y][x] != c.pen {
+		arms |= old
+	}
+	c.rows[y][x] = st.join(arms)
+	c.own[y][x] = c.pen
+	c.arm[y][x] = arms
 }
 
 // String trims trailing spaces on each line and trailing blank lines.
@@ -62,14 +95,45 @@ type boxStyle struct {
 	name                 string
 	h, v, tl, tr, bl, br rune
 	up, down             rune // diagonals for ovals: rising and falling
-	lt, rt, bt           rune // tees: left side, right side, bottom
+	lt, rt, bt, tt       rune // tees: ├ ┤ ┴ ┬
+	cross                rune // ┼
 }
 
 var styles = []boxStyle{
-	{"ascii", '-', '|', '+', '+', '+', '+', '/', '\\', '+', '+', '+'},
-	{"line", '─', '│', '┌', '┐', '└', '┘', '╱', '╲', '├', '┤', '┴'},
-	{"round", '─', '│', '╭', '╮', '╰', '╯', '╱', '╲', '├', '┤', '┴'},
-	{"double", '═', '║', '╔', '╗', '╚', '╝', '╱', '╲', '╠', '╣', '╩'},
+	{"ascii", '-', '|', '+', '+', '+', '+', '/', '\\', '+', '+', '+', '+', '+'},
+	{"line", '─', '│', '┌', '┐', '└', '┘', '╱', '╲', '├', '┤', '┴', '┬', '┼'},
+	{"round", '─', '│', '╭', '╮', '╰', '╯', '╱', '╲', '├', '┤', '┴', '┬', '┼'},
+	{"double", '═', '║', '╔', '╗', '╚', '╝', '╱', '╲', '╠', '╣', '╩', '╦', '╬'},
+}
+
+// join is the character for a cell whose line runs the given ways.
+func (st boxStyle) join(a uint8) rune {
+	across, upDown := a&(armL|armR) != 0, a&(armU|armD) != 0
+	switch {
+	case !upDown:
+		return st.h
+	case !across:
+		return st.v
+	}
+	switch a {
+	case armR | armD:
+		return st.tl
+	case armL | armD:
+		return st.tr
+	case armR | armU:
+		return st.bl
+	case armL | armU:
+		return st.br
+	case armU | armD | armR:
+		return st.lt
+	case armU | armD | armL:
+		return st.rt
+	case armL | armR | armU:
+		return st.bt
+	case armL | armR | armD:
+		return st.tt
+	}
+	return st.cross
 }
 
 // sample shows a style's pieces: a box top, a box bottom, a side, an arrow.
@@ -123,29 +187,22 @@ func order(a, b int) (int, int) {
 func drawBox(c *canvas, x0, y0, x1, y1 int, st boxStyle) {
 	x0, x1 = order(x0, x1)
 	y0, y1 = order(y0, y1)
-	switch {
-	case y0 == y1:
-		for x := x0; x <= x1; x++ {
-			c.set(x, y0, st.h)
-		}
-	case x0 == x1:
-		for y := y0; y <= y1; y++ {
-			c.set(x0, y, st.v)
-		}
-	default:
-		for x := x0 + 1; x < x1; x++ {
-			c.set(x, y0, st.h)
-			c.set(x, y1, st.h)
-		}
-		for y := y0 + 1; y < y1; y++ {
-			c.set(x0, y, st.v)
-			c.set(x1, y, st.v)
-		}
-		c.set(x0, y0, st.tl)
-		c.set(x1, y0, st.tr)
-		c.set(x0, y1, st.bl)
-		c.set(x1, y1, st.br)
+	if y0 == y1 || x0 == x1 {
+		drawPath(c, [][2]int{{x0, y0}, {x1, y1}}, st, false)
+		return
 	}
+	for x := x0 + 1; x < x1; x++ {
+		c.line(x, y0, armL|armR, st)
+		c.line(x, y1, armL|armR, st)
+	}
+	for y := y0 + 1; y < y1; y++ {
+		c.line(x0, y, armU|armD, st)
+		c.line(x1, y, armU|armD, st)
+	}
+	c.line(x0, y0, armR|armD, st)
+	c.line(x1, y0, armL|armD, st)
+	c.line(x0, y1, armR|armU, st)
+	c.line(x1, y1, armL|armU, st)
 }
 
 // drawLine runs across row y0, then down or up column x1, with a corner

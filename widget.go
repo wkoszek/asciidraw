@@ -156,11 +156,11 @@ func drawWidget(c *canvas, o object, st boxStyle) {
 	case "window":
 		drawBox(c, x0, y0, x1, y1, st)
 		row(x0+1, y0+1, " "+padRight(lab, w-6)+" x ")
-		c.set(x0, y0+2, st.lt)
+		c.line(x0, y0+2, armU|armD|armR, st)
 		for x := x0 + 1; x < x1; x++ {
-			c.set(x, y0+2, st.h)
+			c.line(x, y0+2, armL|armR, st)
 		}
-		c.set(x1, y0+2, st.rt)
+		c.line(x1, y0+2, armU|armD|armL, st)
 		// The body stays see-through, so you can draw inside the window.
 	}
 }
