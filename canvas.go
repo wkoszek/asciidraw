@@ -149,6 +149,7 @@ const (
 	toolOval
 	toolLine
 	toolArrow
+	toolFill
 	toolErase
 	toolSelect
 )
@@ -161,6 +162,7 @@ var tools = []struct{ name, kind, help string }{
 	{"Oval", "oval", "drag an oval, Shift: circle"},
 	{"Line", "line", "drag a line, bends once"},
 	{"Arrow", "arrow", "line with a head"},
+	{"Fill", "fill", "shade an area ░▒▓█"},
 	{"Erase", "", "drag to delete objects"},
 	{"Select", "", "drag a box to select (v)"},
 	{"Button", "button", "[ OK ]"},

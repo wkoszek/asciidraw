@@ -10,6 +10,19 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+// TestMain keeps every test away from the real recovery folder, so a test
+// that saves, quits or starts a new drawing can't delete real autosaves.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "asciidraw-test-recover")
+	if err != nil {
+		panic(err)
+	}
+	recoverDir = func() string { return dir }
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 func testAppSized(t *testing.T, w, h int) *app {
 	t.Helper()
 	s := tcell.NewSimulationScreen("")
@@ -288,6 +301,7 @@ func TestMenuPicksToolAndStyle(t *testing.T) {
 	ctrl(a, tcell.KeyDown) // Line
 	ctrl(a, tcell.KeyDown) // Arrow
 	a.key(tcell.NewEventKey(tcell.KeyRune, ' ', 0))
+	ctrl(a, tcell.KeyDown) // Fill
 	if a.tool != toolArrow || a.menu == nil {
 		t.Fatalf("Space should pick and stay open: tool=%d", a.tool)
 	}
@@ -1293,5 +1307,273 @@ func TestCleanCrossings(t *testing.T) {
 	}
 	if got := compose(objs).String(); got != "  |\n--+--\n  |\n" {
 		t.Fatalf("ascii cross: %q", got)
+	}
+}
+
+func TestStackingOrder(t *testing.T) {
+	a := threeBoxes(t)
+	ids := func() []int {
+		var out []int
+		for _, o := range a.objs {
+			out = append(out, o.ID)
+		}
+		return out
+	}
+	start := ids()
+	click(a, 0, 0)
+	typeStr(a, "]")
+	if got := ids(); got[2] != start[0] || a.sel != 2 || !a.isSel(2) {
+		t.Fatalf("] front: %v sel=%d", got, a.sel)
+	}
+	typeStr(a, "[")
+	if got := ids(); !reflect.DeepEqual(got, start) || a.sel != 0 {
+		t.Fatalf("[ back: %v", got)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if got := ids(); got[2] != start[0] {
+		t.Fatalf("undo [: %v", got)
+	}
+}
+
+func TestDuplicate(t *testing.T) {
+	board := fakeClipboard(t)
+	a := joined(t)
+	ctrl(a, tcell.KeyCtrlA)
+	ctrl(a, tcell.KeyCtrlD)
+	if len(a.objs) != 6 || len(a.selected()) != 3 || *board != "" {
+		t.Fatalf("duplicate: %d objects, %d selected, clipboard %q", len(a.objs), len(a.selected()), *board)
+	}
+	b, ar := a.objs[4], a.objs[5]
+	if b.X0 != a.objs[1].X0+2 || b.Y0 != a.objs[1].Y0+1 || ar.To.ID != b.ID || ar.From.ID != a.objs[3].ID {
+		t.Fatalf("the copy should be offset and wired to the copied boxes: %+v %+v", b, ar)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 3 {
+		t.Fatal("undo the duplicate")
+	}
+}
+
+func TestFill(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 2, 1, 8, 3)
+	a.tool = toolFill
+	drag2(a, 0, 0, 10, 4)
+	if a.objs[0].Kind != "fill" || a.sel != 0 {
+		t.Fatalf("a new fill goes to the back: %+v", a.objs)
+	}
+	if got := a.ascii(); !strings.HasPrefix(got, "...........\n..+-----+..\n..|.....|..") {
+		t.Fatalf("fill behind the box:\n%s", got)
+	}
+	typeStr(a, " ")
+	if a.objs[0].Value != 1 || a.objs[0].fillRune() != ':' {
+		t.Fatal("Space should change the shade")
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 1 {
+		t.Fatalf("one undo for the shade, one for the fill: %d left", len(a.objs))
+	}
+	ctrl(a, tcell.KeyCtrlY)
+	// Inside the box, a click types the box's label, not grabs the fill.
+	a.tool = toolBox
+	click(a, 5, 2)
+	typeStr(a, "OK")
+	if a.objs[1].Kind != "box" || len(a.objs[1].Text) == 0 {
+		t.Fatalf("label over a fill: %+v", a.objs)
+	}
+	back, err := decodeYAML(must(encodeYAML(a.objs)))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("yaml: %v %+v", err, back)
+	}
+}
+
+func TestHelpScreen(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	typeStr(a, "?")
+	if !a.help {
+		t.Fatal("? opens help")
+	}
+	a.render()
+	typeStr(a, "x")
+	if a.help || len(a.objs) != 0 {
+		t.Fatal("any key closes help, and does nothing else")
+	}
+}
+
+func TestPanelDragReorders(t *testing.T) {
+	a := threeBoxes(t)
+	px := 100 - panelW + 3
+	first := a.objs[0].ID
+	press(a, px, 1, tcell.Button1) // row 1: the first box
+	press(a, px, 3, tcell.Button1) // over row 3
+	if a.dropAt != 2 {
+		t.Fatalf("drop target: %d", a.dropAt)
+	}
+	a.render()
+	press(a, px, 3, tcell.ButtonNone)
+	if a.objs[2].ID != first || a.sel != 2 {
+		t.Fatalf("dragged to the bottom row: %+v sel=%d", a.objs, a.sel)
+	}
+	press(a, px, 3, tcell.Button1)
+	press(a, px, 1, tcell.Button1)
+	press(a, px, 1, tcell.ButtonNone)
+	if a.objs[0].ID != first {
+		t.Fatal("dragged back to the top row")
+	}
+}
+
+func TestTextEditing(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	click(a, 2, 2)
+	typeStr(a, "helo")
+	ctrl(a, tcell.KeyLeft)
+	typeStr(a, "l") // hel|o -> hell|o
+	if got := a.objs[0].Text[0]; got != "hello" {
+		t.Fatalf("insert in the middle: %q", got)
+	}
+	ctrl(a, tcell.KeyHome)
+	ctrl(a, tcell.KeyDelete) // drop the h
+	ctrl(a, tcell.KeyEnd)
+	ctrl(a, tcell.KeyEnter)
+	typeStr(a, "world")
+	if got := a.objs[0].Text; !reflect.DeepEqual(got, []string{"ello", "world"}) {
+		t.Fatalf("delete and new line: %q", got)
+	}
+	// Enter in the middle splits a line; Backspace at a line's start joins.
+	ctrl(a, tcell.KeyHome)
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyEnter) // wo | rld
+	if got := a.objs[0].Text; !reflect.DeepEqual(got, []string{"ello", "wo", "rld"}) {
+		t.Fatalf("split: %q", got)
+	}
+	ctrl(a, tcell.KeyBackspace2)
+	if got := a.objs[0].Text; !reflect.DeepEqual(got, []string{"ello", "world"}) {
+		t.Fatalf("join: %q", got)
+	}
+	if x, y := a.cursor(); x != 4 || y != 3 {
+		t.Fatalf("cursor after the join should sit between o and r: %d,%d", x, y)
+	}
+	// Up keeps the column where it can.
+	ctrl(a, tcell.KeyUp)
+	typeStr(a, "!")
+	if got := a.objs[0].Text[0]; got != "el!lo" {
+		t.Fatalf("up: %q", got)
+	}
+	// One undo takes the whole run of typing back.
+	ctrl(a, tcell.KeyEscape)
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 0 {
+		t.Fatalf("undo: %+v", a.objs)
+	}
+}
+
+func TestLabelEditingInTheMiddle(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 14, 4)
+	click(a, 3, 2)
+	typeStr(a, "Lgin")
+	for range 3 {
+		ctrl(a, tcell.KeyLeft)
+	}
+	typeStr(a, "o")
+	ctrl(a, tcell.KeyEscape)
+	if got := a.objs[0].Text[0]; got != "Login" {
+		t.Fatalf("label: %q", got)
+	}
+}
+
+func TestScrolling(t *testing.T) {
+	a := testAppSized(t, 60, 14) // no panel; canvas 60x12
+	a.mouse(tcell.NewEventMouse(5, 5, tcell.WheelDown, 0))
+	a.mouse(tcell.NewEventMouse(5, 5, tcell.WheelDown, 0))
+	if a.vy != 6 {
+		t.Fatalf("wheel down: vy=%d", a.vy)
+	}
+	// Drawing now lands 6 rows further down the canvas.
+	drag2(a, 0, 0, 4, 2)
+	if o := a.objs[0]; o.Y0 != 6 || o.Y1 != 8 {
+		t.Fatalf("draw while scrolled: %+v", o)
+	}
+	a.mouse(tcell.NewEventMouse(5, 5, tcell.WheelDown, tcell.ModShift))
+	if a.vx != 3 {
+		t.Fatalf("shift+wheel goes sideways: vx=%d", a.vx)
+	}
+	a.render()
+	if got := a.readout(); !strings.HasPrefix(got, "view 3,6") {
+		t.Fatalf("readout shows the view: %q", got)
+	}
+	ctrl(a, tcell.KeyPgUp)
+	a.mouse(tcell.NewEventMouse(5, 5, tcell.WheelUp, tcell.ModShift))
+	if a.vx != 0 || a.vy != 0 {
+		t.Fatalf("back to the top left: %d,%d", a.vx, a.vy)
+	}
+	// Typing past the bottom keeps the cursor on screen.
+	click(a, 1, 11)
+	for range 5 {
+		typeStr(a, "x")
+		ctrl(a, tcell.KeyEnter)
+	}
+	a.render()
+	if _, cy := a.cursor(); cy-a.vy > 11 || a.vy == 0 {
+		t.Fatalf("cursor off screen: cy=%d vy=%d", cy, a.vy)
+	}
+	// Dragging against the right edge scrolls along.
+	ctrl(a, tcell.KeyEscape)
+	a.vx, a.vy = 0, 0
+	press(a, 50, 1, tcell.Button1)
+	for range 5 {
+		press(a, 59, 1, tcell.Button1)
+	}
+	press(a, 59, 1, tcell.ButtonNone)
+	if o := a.objs[len(a.objs)-1]; o.X1 <= 59 {
+		t.Fatalf("drag past the edge: %+v vx=%d", o, a.vx)
+	}
+}
+
+func TestAutosaveAndRecover(t *testing.T) {
+	dir := t.TempDir()
+	old := recoverDir
+	recoverDir = func() string { return filepath.Join(dir, "recover") }
+	t.Cleanup(func() { recoverDir = old })
+
+	file := filepath.Join(dir, "ui.yaml")
+	a := testAppSized(t, 100, 30)
+	a.file = file
+	a.autosave() // nothing changed: nothing written
+	if _, err := os.Stat(recoverPath(file)); err == nil {
+		t.Fatal("no changes, no recovery copy")
+	}
+	drag2(a, 0, 0, 6, 3)
+	a.autosave()
+	if _, err := os.Stat(file); err == nil {
+		t.Fatal("autosave must never write the real file")
+	}
+
+	// A new session on the same file brings the changes back.
+	b := testAppSized(t, 100, 30)
+	b.file = file
+	b.recover()
+	if len(b.objs) != 1 || !b.dirty || !strings.HasPrefix(b.msg, "Recovered") {
+		t.Fatalf("recover: %+v dirty=%v msg=%q", b.objs, b.dirty, b.msg)
+	}
+	// Saving clears the copy.
+	ctrl(b, tcell.KeyCtrlS)
+	if _, err := os.Stat(recoverPath(file)); err == nil {
+		t.Fatal("saving should delete the recovery copy")
+	}
+	// Quitting on purpose throws an unsaved copy away too.
+	drag2(b, 10, 0, 16, 3)
+	b.autosave()
+	ctrl(b, tcell.KeyCtrlQ)
+	if quit := ctrl(b, tcell.KeyCtrlQ); !quit {
+		t.Fatal("second ^Q quits")
+	}
+	if _, err := os.Stat(recoverPath(file)); err == nil {
+		t.Fatal("^Q twice should delete the recovery copy")
+	}
+	// Untitled drawings have one copy of their own.
+	if filepath.Base(recoverPath("")) != "untitled.yaml" {
+		t.Fatalf("untitled copy: %s", recoverPath(""))
 	}
 }

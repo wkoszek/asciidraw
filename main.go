@@ -5,9 +5,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -65,6 +68,8 @@ type app struct {
 	edit   int  // text object being typed into; -1 until the first key
 	cx, cy int  // where a new text object will start
 	typed  bool // undo snapshot taken for this run of typing
+	tl, tc int  // the typing cursor: line and column in the text
+	vx, vy int  // scroll: the canvas cell shown at the window's top left
 
 	msg       string
 	msgErr    bool
@@ -76,13 +81,15 @@ type app struct {
 	clip      []object // what ^C copied, moved to 0,0
 	clipText  string   // its picture, as put on the system clipboard
 	showPanel bool
+	help      bool   // the ? screen is open
+	dropAt    int    // panel row a dragged row would land on, or -1
 	panelTop  int    // first object shown in the panel
 	suggest   string // name offered by the first save of an imported file
 	exported  string // where the last ^E export went
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, showPanel: true}
+	return &app{s: s, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true}
 }
 
 func (a *app) reset() {
@@ -217,6 +224,8 @@ func (a *app) write(path string) {
 	if path != a.file {
 		a.exported = "" // a new name exports next to the new file
 	}
+	clearRecovery(a.file) // saved: no recovery copy needed, old name or new
+	clearRecovery(path)
 	a.file, a.dirty, a.suggest = path, false, ""
 	a.say(fmt.Sprintf("Saved %s (%d objects)", path, len(a.objs)))
 }
@@ -258,6 +267,10 @@ func (a *app) key(ev *tcell.EventKey) bool {
 		a.menuKey(ev)
 		return false
 	}
+	if a.help {
+		a.help = false
+		return false
+	}
 	pending := a.confirm
 	a.confirm = ""
 
@@ -268,6 +281,7 @@ func (a *app) key(ev *tcell.EventKey) bool {
 			a.sayErr("Unsaved changes. ^Q again to quit, ^S to save.")
 			return false
 		}
+		clearRecovery(a.file) // quitting on purpose throws the changes away
 		return true
 	case tcell.KeyCtrlN:
 		if a.dirty && pending != "new" {
@@ -275,6 +289,7 @@ func (a *app) key(ev *tcell.EventKey) bool {
 			a.sayErr("Unsaved changes. ^N again to discard, ^S to save.")
 			return false
 		}
+		clearRecovery(a.file)
 		a.reset()
 		a.say("New file. Draw, then ^S to name it and save.")
 	case tcell.KeyCtrlS:
@@ -290,6 +305,8 @@ func (a *app) key(ev *tcell.EventKey) bool {
 	case tcell.KeyCtrlG:
 		a.stopTyping()
 		a.toggleGroup()
+	case tcell.KeyCtrlD:
+		a.duplicate()
 	case tcell.KeyCtrlA:
 		a.stopTyping()
 		a.selectAll()
@@ -319,6 +336,10 @@ func (a *app) typeKey(ev *tcell.EventKey) {
 		a.newline()
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		a.backspace()
+	case tcell.KeyDelete:
+		a.deleteForward()
+	case tcell.KeyLeft, tcell.KeyRight, tcell.KeyUp, tcell.KeyDown, tcell.KeyHome, tcell.KeyEnd:
+		a.moveCursor(ev.Key())
 	case tcell.KeyRune:
 		a.typeRune(ev.Rune())
 	}
@@ -326,8 +347,7 @@ func (a *app) typeKey(ev *tcell.EventKey) {
 
 func (a *app) newline() {
 	if a.edit < 0 {
-		_, h := a.canvasSize()
-		a.cy = min(a.cy+1, h-1)
+		a.cy++
 		return
 	}
 	a.typeSnapshot()
@@ -335,7 +355,11 @@ func (a *app) newline() {
 	if len(o.Text) == 0 {
 		o.Text = []string{""}
 	}
-	o.Text = append(o.Text, "")
+	// Split the line at the cursor.
+	line := []rune(o.Text[a.tl])
+	left, right := string(line[:a.tc]), string(line[a.tc:])
+	o.Text = append(o.Text[:a.tl], append([]string{left, right}, o.Text[a.tl+1:]...)...)
+	a.tl, a.tc = a.tl+1, 0
 	a.refit()
 }
 
@@ -360,14 +384,16 @@ func (a *app) typeRune(r rune) {
 	a.typeSnapshot()
 	if a.edit < 0 {
 		a.objs = append(a.objs, object{Kind: "text", X0: a.cx, Y0: a.cy, Text: []string{""}})
-		a.edit = len(a.objs) - 1
+		a.edit, a.tl, a.tc = len(a.objs)-1, 0, 0
 	}
 	a.sel = a.edit
 	o := &a.objs[a.edit]
 	if len(o.Text) == 0 { // a box's first letter
 		o.Text = []string{""}
 	}
-	o.Text[len(o.Text)-1] += string(r)
+	line := []rune(o.Text[a.tl])
+	o.Text[a.tl] = string(line[:a.tc]) + string(r) + string(line[a.tc:])
+	a.tc++
 	a.refit()
 }
 
@@ -375,27 +401,114 @@ func (a *app) backspace() {
 	if a.edit < 0 {
 		return
 	}
+	o := &a.objs[a.edit]
+	if len(o.Text) == 0 || (a.tl == 0 && a.tc == 0) {
+		return // nothing before the cursor
+	}
 	a.typeSnapshot()
+	if a.tc > 0 {
+		line := []rune(o.Text[a.tl])
+		o.Text[a.tl] = string(line[:a.tc-1]) + string(line[a.tc:])
+		a.tc--
+	} else { // at the start of a line: join it to the one above
+		a.tc = runeLen(o.Text[a.tl-1])
+		o.Text[a.tl-1] += o.Text[a.tl]
+		o.Text = append(o.Text[:a.tl], o.Text[a.tl+1:]...)
+		a.tl--
+	}
+	a.dropIfEmpty()
+}
+
+// deleteForward is the Delete key while typing: it removes the letter
+// under the cursor, or joins the next line on at the end of one.
+func (a *app) deleteForward() {
+	if a.edit < 0 {
+		return
+	}
 	o := &a.objs[a.edit]
 	if len(o.Text) == 0 {
 		return
 	}
-	last := []rune(o.Text[len(o.Text)-1])
+	line := []rune(o.Text[a.tl])
 	switch {
-	case len(last) > 0:
-		o.Text[len(o.Text)-1] = string(last[:len(last)-1])
-	case len(o.Text) > 1:
-		o.Text = o.Text[:len(o.Text)-1]
-	}
-	if len(o.Text) == 1 && o.Text[0] == "" && hasLabel(o.Kind) {
-		o.Text = nil // the label is gone; the box stays
+	case a.tc < len(line):
+		a.typeSnapshot()
+		o.Text[a.tl] = string(line[:a.tc]) + string(line[a.tc+1:])
+	case a.tl+1 < len(o.Text):
+		a.typeSnapshot()
+		o.Text[a.tl] += o.Text[a.tl+1]
+		o.Text = append(o.Text[:a.tl+1], o.Text[a.tl+2:]...)
+	default:
 		return
 	}
-	if len(o.Text) == 1 && o.Text[0] == "" {
-		// Nothing left: drop the object, keep the cursor where it started.
-		a.cx, a.cy = o.X0, o.Y0
-		a.remove(a.edit)
-		a.edit, a.sel = -1, -1
+	a.dropIfEmpty()
+}
+
+// dropIfEmpty handles text with nothing left in it: a label is cleared and
+// its shape stays; loose text goes away, and the cursor stays where it was.
+func (a *app) dropIfEmpty() {
+	o := &a.objs[a.edit]
+	if len(o.Text) != 1 || o.Text[0] != "" {
+		return
+	}
+	if hasLabel(o.Kind) {
+		o.Text = nil
+		a.tl, a.tc = 0, 0
+		return
+	}
+	a.cx, a.cy = o.X0, o.Y0
+	a.remove(a.edit)
+	a.edit, a.sel = -1, -1
+}
+
+// moveCursor moves the typing cursor. Before the first letter it moves the
+// spot where new text will start.
+func (a *app) moveCursor(k tcell.Key) {
+	if a.edit < 0 {
+		switch k {
+		case tcell.KeyLeft:
+			a.cx = max(a.cx-1, 0)
+		case tcell.KeyRight:
+			a.cx++
+		case tcell.KeyUp:
+			a.cy = max(a.cy-1, 0)
+		case tcell.KeyDown:
+			a.cy++
+		}
+		return
+	}
+	t := a.objs[a.edit].Text
+	if len(t) == 0 {
+		return
+	}
+	n := func(l int) int { return runeLen(t[l]) }
+	switch k {
+	case tcell.KeyLeft:
+		if a.tc > 0 {
+			a.tc--
+		} else if a.tl > 0 {
+			a.tl, a.tc = a.tl-1, n(a.tl-1)
+		}
+	case tcell.KeyRight:
+		if a.tc < n(a.tl) {
+			a.tc++
+		} else if a.tl+1 < len(t) {
+			a.tl, a.tc = a.tl+1, 0
+		}
+	case tcell.KeyUp:
+		if a.tl > 0 {
+			a.tl--
+			a.tc = min(a.tc, n(a.tl))
+		}
+	case tcell.KeyDown:
+		if a.tl+1 < len(t) {
+			a.tl++
+			a.tc = min(a.tc, n(a.tl))
+		}
+	case tcell.KeyHome:
+		a.tc = 0
+	case tcell.KeyEnd:
+		a.tc = n(a.tl)
 	}
 }
 
@@ -415,16 +528,26 @@ func (a *app) stopTyping() {
 func (a *app) startEditing(i int) {
 	a.typing, a.edit, a.typed = true, i, false
 	a.setSelection([]int{i}, i)
+	// The cursor starts at the end.
+	t := a.objs[i].Text
+	a.tl, a.tc = max(len(t)-1, 0), 0
+	if len(t) > 0 {
+		a.tc = runeLen(t[a.tl])
+	}
 }
 
 // cursor is where the next typed character goes.
 func (a *app) cursor() (int, int) {
 	if a.edit >= 0 && a.edit < len(a.objs) {
 		o := a.objs[a.edit]
-		if hasLabel(o.Kind) {
+		if len(o.Text) == 0 {
 			return o.labelCursor()
 		}
-		return o.X0 + len([]rune(o.Text[len(o.Text)-1])), o.Y0 + len(o.Text) - 1
+		if hasLabel(o.Kind) {
+			x, y := o.labelStart(a.tl)
+			return x + a.tc, y
+		}
+		return o.X0 + a.tc, o.Y0 + a.tl
 	}
 	return a.cx, a.cy
 }
@@ -446,6 +569,14 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 	case tcell.KeyEscape:
 		a.sel = -1
 		return
+	case tcell.KeyPgUp, tcell.KeyPgDn:
+		_, h := a.canvasSize()
+		step := max(h/2, 1)
+		if ev.Key() == tcell.KeyPgUp {
+			step = -step
+		}
+		a.vy = max(a.vy+step, 0)
+		return
 	case tcell.KeyRune: // vim-style, only when not typing
 		switch ev.Rune() {
 		case 'y':
@@ -464,6 +595,12 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.toggleSelectTool()
 		case 't':
 			a.cycleStyle()
+		case ']':
+			a.restack(true)
+		case '[':
+			a.restack(false)
+		case '?':
+			a.help = true
 		}
 		return
 	}
@@ -575,10 +712,35 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 		a.swallow = held
 		return
 	}
+	if a.help {
+		if held {
+			a.help, a.swallow = false, true
+		}
+		return
+	}
 	cw, h := a.canvasSize()
-	x, y := min(max(sx, 0), cw-1), min(max(sy, 0), h-1)
+	if a.drag != nil && a.drag.mode != dPanel {
+		// Dragging against the window's edge scrolls the canvas along.
+		switch {
+		case sx >= cw-1:
+			a.vx++
+		case sx <= 0 && a.vx > 0:
+			a.vx--
+		}
+		switch {
+		case sy >= h-1:
+			a.vy++
+		case sy <= 0 && a.vy > 0:
+			a.vy--
+		}
+	}
+	// Screen to canvas: the canvas can be bigger than the window.
+	x, y := min(max(sx, 0), cw-1)+a.vx, min(max(sy, 0), h-1)+a.vy
 
 	if a.drag != nil {
+		if a.drag.mode == dPanel && a.drag.obj >= 0 {
+			a.dropAt = a.panelDropAt(sx, sy)
+		}
 		a.mx, a.my = x, y
 		a.dragTo(x, y)
 		if !held {
@@ -600,6 +762,7 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 		case sx < cw && sy < h:
 			a.mx, a.my = x, y
 			a.hover = compose(a.objs).owner(x, y)
+			a.wheel(b)
 		}
 		return
 	}
@@ -607,7 +770,8 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	switch {
 	case a.inPanel(sx, sy):
 		a.stopTyping()
-		a.drag = &drag{mode: dPanel, obj: -1}
+		a.drag = &drag{mode: dPanel, obj: a.panelItemAt(sx, sy)}
+		a.dropAt = -1
 		if i := a.panelItemAt(sx, sy); i >= 0 {
 			if a.shift {
 				a.toggleSel(i)
@@ -623,6 +787,27 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	default:
 		a.mx, a.my = x, y
 		a.press(x, y, b&tcell.Button2 != 0)
+	}
+}
+
+// wheel scrolls the canvas: up and down, or sideways with Shift or a
+// sideways wheel.
+func (a *app) wheel(b tcell.ButtonMask) {
+	const step = 3
+	up, down := b&tcell.WheelUp != 0, b&tcell.WheelDown != 0
+	left, right := b&tcell.WheelLeft != 0, b&tcell.WheelRight != 0
+	if a.shift {
+		left, right, up, down = left || up, right || down, false, false
+	}
+	switch {
+	case up:
+		a.vy = max(a.vy-step, 0)
+	case down:
+		a.vy += step
+	case left:
+		a.vx = max(a.vx-step, 0)
+	case right:
+		a.vx += step
 	}
 }
 
@@ -645,7 +830,11 @@ func (a *app) press(x, y int, right bool) {
 			return
 		}
 	}
-	if i := compose(a.objs).owner(x, y); i >= 0 {
+	i := compose(a.objs).owner(x, y)
+	if i >= 0 && a.objs[i].Kind == "fill" && boxAt(a.objs, x, y) > i {
+		i = -1 // the inside of a box drawn over a fill counts as empty
+	}
+	if i >= 0 {
 		if a.shift { // Shift-click adds or removes; it never drags
 			d.mode = dPanel
 			a.toggleSel(i)
@@ -768,7 +957,19 @@ func (a *app) widgetTool() bool { return isWidget(tools[a.tool].kind) }
 func (a *app) release() {
 	d := a.drag
 	a.drag, a.pressed, a.snap = nil, -1, -1
+	drop := a.dropAt
+	a.dropAt = -1
 	switch d.mode {
+	case dPanel:
+		// A row dragged to another row moves its shapes there in the
+		// stacking order: below that row going down, above it going up.
+		if d.obj >= 0 && drop >= 0 && drop != d.obj {
+			if drop > d.obj {
+				drop++
+			}
+			a.moveSelTo(drop)
+			a.say("Moved " + a.describe(a.selected()) + " in the stacking order.")
+		}
 	case dMove, dResize:
 		a.objs[d.obj].normalize()
 		// A line that was moved on its own may now touch other shapes, or
@@ -815,6 +1016,10 @@ func (a *app) release() {
 		}
 		a.objs = append(a.objs, a.newShape(d))
 		a.sel = len(a.objs) - 1
+		if n := len(a.objs) - 1; a.objs[n].Kind == "fill" { // shading belongs behind things
+			a.objs = append([]object{a.objs[n]}, a.objs[:n]...)
+			a.sel = 0
+		}
 		a.commit(d.before)
 	case dErase:
 		hits := objectsIn(a.objs, d.x0, d.y0, d.x1, d.y1)
@@ -866,7 +1071,11 @@ func (a *app) readout() string {
 			return fmt.Sprintf("x=%d y=%d w=%d h=%d", x0, y0, x1-x0+1, y1-y0+1)
 		}
 	}
-	return fmt.Sprintf("x=%d y=%d", a.mx, a.my)
+	pos := fmt.Sprintf("x=%d y=%d", a.mx, a.my)
+	if a.vx != 0 || a.vy != 0 {
+		pos = fmt.Sprintf("view %d,%d  ", a.vx, a.vy) + pos
+	}
+	return pos
 }
 
 // shiftMark notes in the readout that Shift is keeping a shape symmetric.
@@ -912,8 +1121,16 @@ func (a *app) render() {
 			doomed[i] = true
 		}
 	}
-	for y := 0; y < h; y++ {
-		for x := 0; x < cw; x++ {
+	if a.typing && a.menu == nil { // keep the typing cursor in view
+		cx, cy := a.cursor()
+		a.vx = min(a.vx, cx)
+		a.vx = max(a.vx, cx-cw+1)
+		a.vy = min(a.vy, cy)
+		a.vy = max(a.vy, cy-h+1)
+	}
+	for sy := 0; sy < h; sy++ {
+		for sx := 0; sx < cw; sx++ {
+			x, y := sx+a.vx, sy+a.vy
 			st := a.objStyle(scene.owner(x, y), doomed)
 			if d != nil && (d.mode == dErase || d.mode == dSelect) {
 				x0, x1 := order(d.x0, d.x1)
@@ -926,7 +1143,7 @@ func (a *app) render() {
 					}
 				}
 			}
-			s.SetContent(x, y, scene.get(x, y), nil, st)
+			s.SetContent(sx, sy, scene.get(x, y), nil, st)
 		}
 	}
 	// A selected oval shows its corners, since that is where it resizes.
@@ -934,8 +1151,9 @@ func (a *app) render() {
 		i := sel[0]
 		o := a.objs[i]
 		for _, p := range [][2]int{{o.X0, o.Y0}, {o.X1, o.Y0}, {o.X0, o.Y1}, {o.X1, o.Y1}} {
-			if p[0] < cw && p[1] < h && scene.get(p[0], p[1]) == ' ' {
-				s.SetContent(p[0], p[1], '+', nil, a.objStyle(i, doomed))
+			px, py := p[0]-a.vx, p[1]-a.vy
+			if px >= 0 && py >= 0 && px < cw && py < h && scene.get(p[0], p[1]) == ' ' {
+				s.SetContent(px, py, '+', nil, a.objStyle(i, doomed))
 			}
 		}
 	}
@@ -982,11 +1200,15 @@ func (a *app) render() {
 		}
 		a.text(posX, sh-2, pos, bar.Foreground(tcell.ColorAqua).Bold(true))
 		if a.typing && a.menu == nil {
-			s.ShowCursor(a.cursor())
+			cx, cy := a.cursor()
+			s.ShowCursor(cx-a.vx, cy-a.vy)
 		}
 	}
 	if a.menu != nil {
 		a.renderMenu()
+	}
+	if a.help {
+		a.renderHelp()
 	}
 
 	// Legend: as many items as fit.
@@ -1056,14 +1278,33 @@ func main() {
 
 	a := newApp(s)
 	a.objs, a.file, a.suggest = objs, file, suggest
-	a.say("Drag to draw. Click to type. Drag a shape to move it.")
+	a.say("Drag to draw. Click to type. Press ? for every key.")
 	if note != "" {
 		a.say(note)
 	}
+	a.recover()
+
+	// Autosave on a timer, and right away if the window closes.
+	go func() {
+		for range time.Tick(autosaveEvery) {
+			s.PostEvent(tcell.NewEventInterrupt("autosave"))
+		}
+	}()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		s.PostEvent(tcell.NewEventInterrupt("quit"))
+	}()
 
 	for {
 		a.render()
 		switch ev := s.PollEvent().(type) {
+		case *tcell.EventInterrupt:
+			a.autosave()
+			if ev.Data() == "quit" {
+				return
+			}
 		case *tcell.EventResize:
 			s.Sync()
 		case *tcell.EventKey:

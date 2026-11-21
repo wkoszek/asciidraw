@@ -23,7 +23,7 @@ type object struct {
 	To    anchor // what a line's end is attached to
 }
 
-var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text"}
+var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text", "fill": "Fill"}
 
 func init() {
 	for k, d := range widgets {
@@ -32,7 +32,23 @@ func init() {
 }
 
 // boxy kinds are sized by a rectangle and have four corner handles.
-func (o object) boxy() bool { return o.Kind == "box" || o.Kind == "oval" || isWidget(o.Kind) }
+func (o object) boxy() bool {
+	return o.Kind == "box" || o.Kind == "oval" || o.Kind == "fill" || isWidget(o.Kind)
+}
+
+// fillPatterns are the shades a fill cycles through with Space.
+var fillPatterns = [][]rune{
+	{'.', ':', '%', '#'}, // ascii
+	{'░', '▒', '▓', '█'}, // the other styles
+}
+
+func (o object) fillRune() rune {
+	set := fillPatterns[1]
+	if o.Style == 0 {
+		set = fillPatterns[0]
+	}
+	return set[min(max(o.Value, 0), len(set)-1)]
+}
 
 // squarable kinds turn square or round with Shift.
 func (o object) squarable() bool { return o.Kind == "box" || o.Kind == "oval" }
@@ -64,6 +80,15 @@ func (o object) draw(c *canvas) {
 	case "oval":
 		drawOval(c, o.X0, o.Y0, o.X1, o.Y1, st)
 		drawLabel(c, o)
+	case "fill":
+		x0, x1 := order(o.X0, o.X1)
+		y0, y1 := order(o.Y0, o.Y1)
+		r := o.fillRune()
+		for y := y0; y <= y1; y++ {
+			for x := x0; x <= x1; x++ {
+				c.set(x, y, r)
+			}
+		}
 	default:
 		if isWidget(o.Kind) {
 			drawWidget(c, o, st)
@@ -128,7 +153,7 @@ type handle struct{ ok, x1, y1 bool }
 // line end.
 func (o object) handleAt(x, y int) handle {
 	switch o.Kind {
-	case "box", "oval", "button", "checkbox", "radio", "input", "dropdown", "tabs", "scrollbar", "progress", "window":
+	case "box", "oval", "fill", "button", "checkbox", "radio", "input", "dropdown", "tabs", "scrollbar", "progress", "window":
 		for _, hx := range []bool{false, true} {
 			for _, hy := range []bool{false, true} {
 				px, py := o.X0, o.Y0
@@ -156,6 +181,9 @@ func (o object) handleAt(x, y int) handle {
 
 func (o object) label() string {
 	switch o.Kind {
+	case "fill":
+		x, y, w, h := o.bounds()
+		return fmt.Sprintf("%-6s %c %d×%d at %d,%d", "Fill", o.fillRune(), w, h, x, y)
 	case "box", "oval":
 		x, y, w, h := o.bounds()
 		if len(o.Text) > 0 {

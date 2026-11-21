@@ -18,7 +18,7 @@ type anchor struct {
 func isLine(kind string) bool { return kind == "line" || kind == "arrow" }
 
 // canTake says whether lines can attach to a shape of this kind.
-func canTake(o object) bool { return o.boxy() }
+func canTake(o object) bool { return o.boxy() && o.Kind != "fill" }
 
 // ensureIDs gives every shape without an ID a new one.
 func (a *app) ensureIDs() {

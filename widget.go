@@ -292,12 +292,17 @@ func (a *app) editWidget() {
 // toggleWidget is Space on a selected widget: flip a checkbox or radio,
 // move to the next tab, or add 10% to a bar.
 func (a *app) toggleWidget() {
-	if a.sel < 0 || a.sel >= len(a.objs) || !isWidget(a.objs[a.sel].Kind) {
+	if a.sel < 0 || a.sel >= len(a.objs) {
+		return
+	}
+	if k := a.objs[a.sel].Kind; !isWidget(k) && k != "fill" {
 		return
 	}
 	before := cloneObjs(a.objs)
 	w := &a.objs[a.sel]
 	switch w.Kind {
+	case "fill":
+		w.Value = (w.Value + 1) % len(fillPatterns[0])
 	case "checkbox", "radio":
 		w.Value = 1 - w.Value
 	case "tabs":

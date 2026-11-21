@@ -53,6 +53,16 @@ func (a *app) panelItemAt(sx, sy int) int {
 	return -1
 }
 
+// panelDropAt gives the row a dragged row would land on: the row under the
+// mouse, the last row if below the list, or -1 outside the panel.
+func (a *app) panelDropAt(sx, sy int) int {
+	if !a.inPanel(sx, sy) || len(a.objs) == 0 {
+		return -1
+	}
+	row := a.panelTop + sy - 1
+	return min(max(row, 0), len(a.objs)-1)
+}
+
 func (a *app) scrollPanel(n int) {
 	a.panelTop = min(max(a.panelTop+n, 0), max(len(a.objs)-a.panelRows(), 0))
 }
@@ -124,6 +134,9 @@ func (a *app) renderPanel() {
 			st = st.Background(colSel).Foreground(tcell.ColorBlack)
 		case a.hovered(i):
 			st = st.Background(tcell.PaletteColor(238)).Foreground(colHover)
+		}
+		if i == a.dropAt && a.drag != nil && i != a.drag.obj {
+			st = st.Underline(true).Bold(true)
 		}
 		tag := "   "
 		if g := a.objs[i].Group; g != 0 {

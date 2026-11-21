@@ -67,7 +67,7 @@ func fromFileAnchor(f *fileAnchor) (anchor, error) {
 }
 
 // hasValue lists the widgets whose state is worth writing down.
-var hasValue = map[string]bool{"checkbox": true, "radio": true, "tabs": true, "progress": true, "scrollbar": true}
+var hasValue = map[string]bool{"checkbox": true, "radio": true, "tabs": true, "progress": true, "scrollbar": true, "fill": true}
 
 func ptr(n int) *int { return &n }
 
@@ -141,7 +141,7 @@ func decodeYAML(data []byte) ([]object, error) {
 				continue // nothing to show
 			}
 		default:
-			if f.Kind != "box" && f.Kind != "oval" && f.Kind != "line" && f.Kind != "arrow" && !isWidget(f.Kind) {
+			if f.Kind != "box" && f.Kind != "oval" && f.Kind != "fill" && f.Kind != "line" && f.Kind != "arrow" && !isWidget(f.Kind) {
 				return nil, fmt.Errorf("object %d: unknown kind %q", i+1, f.Kind)
 			}
 			st, ok := styleIndex(f.Style)
@@ -151,8 +151,9 @@ func decodeYAML(data []byte) ([]object, error) {
 			o.Style = st
 			o.X0, o.Y0, o.X1, o.Y1 = val(f.X0), val(f.Y0), val(f.X1), val(f.Y1)
 			if isWidget(f.Kind) || hasLabel(f.Kind) {
-				o.Text, o.Value = f.Text, val(f.Value)
+				o.Text = f.Text
 			}
+			o.Value = val(f.Value)
 			o.normalize()
 		}
 		objs = append(objs, o)

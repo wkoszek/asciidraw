@@ -51,14 +51,14 @@ under a third heading, "Widgets".
 
 ## 7. Smaller things
 
-- [ ] Bring to front and send to back, maybe `[` and `]`.
-- [ ] Reorder shapes by dragging rows in the panel.
-- [ ] Duplicate in place, with an offset, in one key.
-- [ ] Real text editing: arrow keys, and typing in the middle of a line.
-- [ ] A canvas bigger than the window, with scrolling.
-- [ ] `?` opens a help screen with every key.
-- [ ] Fill patterns `░▒▓` for shaded areas.
-- [ ] Autosave, so a crash or a closed window loses nothing.
+- [x] Bring to front and send to back, maybe `[` and `]`.
+- [x] Reorder shapes by dragging rows in the panel.
+- [x] Duplicate in place, with an offset, in one key.
+- [x] Real text editing: arrow keys, and typing in the middle of a line.
+- [x] A canvas bigger than the window, with scrolling.
+- [x] `?` opens a help screen with every key.
+- [x] Fill patterns `░▒▓` for shaded areas.
+- [x] Autosave, so a crash or a closed window loses nothing.
 
 ## 8. Drawings inside docs
 
