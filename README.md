@@ -2,7 +2,8 @@
 
 Draw ASCII mockups in the terminal with your mouse.
 
-You drag to make boxes, ovals, lines and arrows. You click to type. Each
+You drag to make boxes, ovals, lines and arrows. You click to type. You can
+also add widgets, such as buttons, checkboxes, input fields and tabs. Each
 shape stays separate, so you can move it, resize it, copy it or delete it
 later. Save the drawing as YAML and export the picture as Markdown.
 
@@ -61,6 +62,53 @@ tall is about 20 columns wide.
 A line goes sideways from where you press, turns once, then goes up or down
 to where you let go. Drag straight across or straight down for a line with
 no turn. An arrow is the same line with a head on the end.
+
+## Widgets
+
+Widgets are ready-made UI parts. There are nine: button, checkbox, radio
+button, input field, dropdown, tabs, progress bar, scrollbar and window.
+
+```
+button   checkbox           radio        dropdown
+[ OK ]   [x] Remember me    (•) Option   [ Choose     ▼ ]
+
+input field                 progress bar
+[user______________]        [█████░░░░░░░░]  40%
+
+tabs
+│ Home │ Settings │ About │
+│      └──────────┴───────┘
+```
+
+The ^T menu lists the widgets in a second column, to the right of the
+tools. Pick one and close the menu with Esc. Then click empty space to place
+the widget at its default size, or drag to set its size. Drag a widget's
+corner later to resize it.
+
+Some widgets limit their size. A checkbox or a radio button is always one
+row, as wide as its label. A button is one row, unless you drag it 3 or more
+rows tall; then it becomes a box with the label in the middle.
+
+To change a widget, click it to select it:
+
+- **Enter** lets you edit its label. You type in the status bar, Enter
+  saves, and Esc cancels. For tabs, type the names with commas between
+  them. For a progress bar or a scrollbar, type a number from 0 to 100. On
+  a scrollbar it sets where the handle sits.
+- **Space** checks or unchecks a checkbox or radio button, or makes the next
+  tab the active one. On a progress bar or scrollbar it adds 10, and after
+  100 it goes back to 0.
+
+Radio buttons don't know about each other. Checking one leaves the others as
+they are.
+
+A window's inside is empty space. To draw in it, switch to a drawing tool
+such as Box first; with the Window tool still picked, a click places another
+window. Shapes inside a window don't move when you move the window.
+
+A new widget uses the style picked in the menu, and keeps it. In the ascii
+style it uses only plain characters, such as `#` and `.` for a progress bar.
+Widgets export to Markdown like everything else.
 
 ## Changing shapes
 
