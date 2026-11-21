@@ -1,0 +1,18 @@
+# Build output
+/asciidraw
+*.test
+*.out
+
+# Object files from early versions
+*.adraw
+
+# Syncthing
+.stfolder
+.stignore
+*.sync-conflict-*
+
+# Editors and macOS
+.DS_Store
+.idea/
+.vscode/
+*.swp

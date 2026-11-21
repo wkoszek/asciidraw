@@ -1,0 +1,22 @@
+name: asciidraw
+kind: cli
+description: >
+  A terminal program for drawing ASCII mockups with the mouse: boxes, ovals,
+  lines, arrows and text as objects you can select, move, resize, copy and
+  paste. Saves drawings as YAML and exports them as Markdown.
+visibility: private
+language: go
+tags:
+  - cli
+  - tui
+  - ascii
+  - diagrams
+  - mockups
+  - go
+notes: |
+  Single static binary built on tcell. Objects are the source of truth: each
+  frame composes them onto a character grid that also records which object
+  drew each cell, for hit testing. ^S writes YAML (styles stored by name),
+  ^E writes a fenced Markdown copy. y/d/p/x and ^C/^X/^V copy, cut and paste,
+  using pbcopy/pbpaste for the system clipboard. Asks Ghostty for Shift+mouse
+  via XTSHIFTESCAPE. Tests drive the app through a tcell simulation screen.
