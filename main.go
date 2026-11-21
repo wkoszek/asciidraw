@@ -803,7 +803,7 @@ func (a *app) objStyle(i int, doomed map[int]bool) tcell.Style {
 		st = st.Foreground(colPressed).Bold(true)
 	case a.isSel(i):
 		st = st.Foreground(colSel).Bold(true)
-	case i == a.hover:
+	case a.hovered(i):
 		st = st.Foreground(colHover)
 	}
 	return st

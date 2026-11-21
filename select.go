@@ -74,6 +74,16 @@ func (a *app) groupOf(i int) []int {
 	return out
 }
 
+// hovered says whether i should light up for the mouse: it is the shape
+// under the mouse, or in the same group.
+func (a *app) hovered(i int) bool {
+	if a.hover < 0 || a.hover >= len(a.objs) || i < 0 || i >= len(a.objs) {
+		return false
+	}
+	g := a.objs[a.hover].Group
+	return i == a.hover || (g != 0 && a.objs[i].Group == g)
+}
+
 // toggleSel adds i's group to the selection, or takes it out.
 func (a *app) toggleSel(i int) {
 	sel := a.selected()

@@ -1001,3 +1001,25 @@ func TestStatusMessageFits(t *testing.T) {
 		t.Fatalf("status line: %q", line)
 	}
 }
+
+func TestHoverLightsGroup(t *testing.T) {
+	a := threeBoxes(t)
+	click(a, 0, 0)
+	shiftClick(a, 10, 0)
+	typeStr(a, "g")
+	ctrl(a, tcell.KeyEscape)
+	press(a, 10, 1, tcell.ButtonNone) // hover the second box's edge
+	a.render()
+	sim := a.s.(tcell.SimulationScreen)
+	color := func(x, y int) tcell.Color {
+		_, _, st, _ := sim.GetContent(x, y)
+		fg, _, _ := st.Decompose()
+		return fg
+	}
+	if color(0, 1) != colHover || color(10, 1) != colHover {
+		t.Fatalf("both grouped boxes should light: %v %v", color(0, 1), color(10, 1))
+	}
+	if color(20, 1) == colHover {
+		t.Fatal("the box outside the group should not light")
+	}
+}

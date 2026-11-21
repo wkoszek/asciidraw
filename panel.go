@@ -122,7 +122,7 @@ func (a *app) renderPanel() {
 			st = st.Background(colPressed).Foreground(tcell.ColorBlack).Bold(true)
 		case a.isSel(i):
 			st = st.Background(colSel).Foreground(tcell.ColorBlack)
-		case i == a.hover || (a.hover >= 0 && a.objs[i].Group != 0 && a.objs[i].Group == a.objs[a.hover].Group):
+		case a.hovered(i):
 			st = st.Background(tcell.PaletteColor(238)).Foreground(colHover)
 		}
 		tag := "   "
