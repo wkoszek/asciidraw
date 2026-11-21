@@ -42,6 +42,21 @@ var fillPatterns = [][]rune{
 	{'░', '▒', '▓', '█'}, // the other styles
 }
 
+// nextShade steps a fill through all eight shades: ░ ▒ ▓ █, then . : % #.
+// The style picks the set: ascii for the dots, line for the blocks.
+func (o *object) nextShade() {
+	n := len(fillPatterns[0])
+	i := min(max(o.Value, 0), n-1)
+	if o.Style == 0 {
+		i += n
+	}
+	i = (i + 1) % (2 * n)
+	o.Value, o.Style = i%n, 1
+	if i >= n {
+		o.Style = 0
+	}
+}
+
 func (o object) fillRune() rune {
 	set := fillPatterns[1]
 	if o.Style == 0 {

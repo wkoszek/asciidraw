@@ -302,7 +302,7 @@ func (a *app) toggleWidget() {
 	w := &a.objs[a.sel]
 	switch w.Kind {
 	case "fill":
-		w.Value = (w.Value + 1) % len(fillPatterns[0])
+		w.nextShade()
 	case "checkbox", "radio":
 		w.Value = 1 - w.Value
 	case "tabs":

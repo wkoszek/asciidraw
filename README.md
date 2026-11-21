@@ -254,9 +254,10 @@ shape lower in the list covers the ones above it.
 
 The Fill tool shades a rectangle: drag one, as you would a box. A new fill
 goes to the back, behind everything else. To change it, click a part of it
-that shows, or its row in the panel. Then press **Space** for the next
-shade, `░ ▒ ▓ █`, or `t` to switch between those and the ascii shades
-`. : % #`. A fill never blocks clicks meant for a box on top of it: a click
+that shows, or its row in the panel. Then press **Space** or `t` for the
+next shade. Each press steps through `░ ▒ ▓ █`, then the plain `. : % #`,
+then back to `░`. These are standard characters, so no special font is
+needed. A fill never blocks clicks meant for a box on top of it: a click
 inside the box still types the box's label.
 
 ### Duplicate

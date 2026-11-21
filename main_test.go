@@ -1365,8 +1365,8 @@ func TestFill(t *testing.T) {
 		t.Fatalf("fill behind the box:\n%s", got)
 	}
 	typeStr(a, " ")
-	if a.objs[0].Value != 1 || a.objs[0].fillRune() != ':' {
-		t.Fatal("Space should change the shade")
+	if a.objs[0].fillRune() != ':' {
+		t.Fatalf("Space steps from . to the next shade, : : got %c", a.objs[0].fillRune())
 	}
 	ctrl(a, tcell.KeyCtrlZ)
 	ctrl(a, tcell.KeyCtrlZ)
@@ -1603,5 +1603,28 @@ func TestHelpFits80x24(t *testing.T) {
 	}
 	if top < 0 || bottom < 0 || !strings.Contains(row(top), "╮") {
 		t.Fatalf("help should fit whole on 80x24: top=%d bottom=%d\n%s", top, bottom, row(top))
+	}
+}
+
+func TestEveryShadePressShows(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	a.style = 1
+	a.tool = toolFill
+	drag2(a, 0, 0, 5, 2)
+	seen := map[rune]bool{a.objs[0].fillRune(): true}
+	for k := 0; k < 7; k++ {
+		key := "t"
+		if k%2 == 1 {
+			key = " "
+		}
+		before := a.objs[0].fillRune()
+		typeStr(a, key)
+		if got := a.objs[0].fillRune(); got == before {
+			t.Fatalf("press %d (%q) left the fill as %c", k, key, got)
+		}
+		seen[a.objs[0].fillRune()] = true
+	}
+	if len(seen) != 8 {
+		t.Fatalf("t and Space should reach all 8 shades: %v", seen)
 	}
 }

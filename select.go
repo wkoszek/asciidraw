@@ -211,7 +211,8 @@ func (a *app) toggleGroup() {
 }
 
 // cycleStyle moves the selected shapes on to the next style: ascii, line,
-// round, double, then ascii again. They all take the style after the
+// round, double, then ascii again. Fills step to their next shade instead,
+// since line, round and double draw them the same way. They all take the style after the
 // primary shape's, so a mixed selection comes out matching. With nothing
 // selected, it changes the style for new shapes.
 func (a *app) cycleStyle() {
@@ -233,6 +234,10 @@ func (a *app) cycleStyle() {
 	next := (cur + 1) % len(styles)
 	before := cloneObjs(a.objs)
 	for _, i := range styled {
+		if a.objs[i].Kind == "fill" { // three styles draw fills alike: step the shade
+			a.objs[i].nextShade()
+			continue
+		}
 		a.objs[i].Style = next
 	}
 	a.commit(before)
