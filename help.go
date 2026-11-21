@@ -41,6 +41,7 @@ var helpRight = []string{
 	"  ^D             duplicate",
 	"  ]  [           front, back",
 	"  t              next style",
+	"  C              colors",
 	"  Enter          edit label or text",
 	"  Space          toggle, next shade",
 }

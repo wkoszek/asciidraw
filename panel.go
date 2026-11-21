@@ -143,6 +143,10 @@ func (a *app) renderPanel() {
 			tag = fmt.Sprintf("g%-2d", g)
 		}
 		a.text(x0+1, 1+r, fit(fmt.Sprintf("%2d %s %s", i+1, tag, a.objs[i].label()), inner), st)
+		if o := a.objs[i]; o.FG != "" || o.BG != "" { // a swatch of its colors
+			sw := tcell.StyleDefault.Foreground(colorOf(o.FG)).Background(colorOf(o.BG))
+			a.s.SetContent(x0+3, 1+r, '■', nil, sw)
+		}
 	}
 	if h >= 8 {
 		a.text(x0+1, h-5, " ⇧click add g group v select", dim)

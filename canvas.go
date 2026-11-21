@@ -6,9 +6,28 @@ import "strings"
 // cell, so the mouse can find the object under it.
 type canvas struct {
 	rows [][]rune
-	own  [][]int   // object index + 1; 0 means nothing
-	arm  [][]uint8 // for line cells, which ways the line runs; see line
-	pen  int       // owner recorded by set
+	own  [][]int    // object index + 1; 0 means nothing
+	arm  [][]uint8  // for line cells, which ways the line runs; see line
+	bgc  [][]string // background color of each cell, by name
+	pen  int        // owner recorded by set
+	bg   string     // background the current shape paints its cells with
+}
+
+// paint gives a cell the current background without changing what is in it.
+func (c *canvas) paint(x, y int) {
+	if x < 0 || y < 0 || c.bg == "" {
+		return
+	}
+	c.grow(x, y)
+	c.bgc[y][x] = c.bg
+}
+
+// bgAt is the background color name of a cell, or "".
+func (c *canvas) bgAt(x, y int) string {
+	if y < 0 || y >= len(c.bgc) || x < 0 || x >= len(c.bgc[y]) {
+		return ""
+	}
+	return c.bgc[y][x]
 }
 
 // Arms: the directions a line leaves a cell by.
@@ -39,11 +58,13 @@ func (c *canvas) grow(x, y int) {
 		c.rows = append(c.rows, nil)
 		c.own = append(c.own, nil)
 		c.arm = append(c.arm, nil)
+		c.bgc = append(c.bgc, nil)
 	}
 	for len(c.rows[y]) <= x {
 		c.rows[y] = append(c.rows[y], ' ')
 		c.own[y] = append(c.own[y], 0)
 		c.arm[y] = append(c.arm[y], 0)
+		c.bgc[y] = append(c.bgc[y], "")
 	}
 }
 
@@ -56,6 +77,7 @@ func (c *canvas) set(x, y int, r rune) {
 	c.rows[y][x] = r
 	c.own[y][x] = c.pen
 	c.arm[y][x] = 0
+	c.paint(x, y)
 }
 
 // line puts a piece of line in a cell. Where it lands on another shape's
@@ -72,6 +94,7 @@ func (c *canvas) line(x, y int, arms uint8, st boxStyle) {
 	c.rows[y][x] = st.join(arms)
 	c.own[y][x] = c.pen
 	c.arm[y][x] = arms
+	c.paint(x, y)
 }
 
 // String trims trailing spaces on each line and trailing blank lines.

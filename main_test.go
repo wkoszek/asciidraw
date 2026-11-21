@@ -1628,3 +1628,97 @@ func TestEveryShadePressShows(t *testing.T) {
 		t.Fatalf("t and Space should reach all 8 shades: %v", seen)
 	}
 }
+
+func cellStyle(a *app, x, y int) (rune, tcell.Color, tcell.Color) {
+	r, _, st, _ := a.s.(tcell.SimulationScreen).GetContent(x, y)
+	fg, bg, _ := st.Decompose()
+	return r, fg, bg
+}
+
+func TestColors(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)
+	click(a, 3, 2)
+	typeStr(a, "Hi")
+	ctrl(a, tcell.KeyEscape) // stop typing; the box stays selected
+	typeStr(a, "C")
+	if a.colors == nil {
+		t.Fatal("C should open the color picker")
+	}
+	ctrl(a, tcell.KeyRight) // text: black
+	ctrl(a, tcell.KeyRight) // text: red
+	ctrl(a, tcell.KeyDown)
+	for range 5 {
+		ctrl(a, tcell.KeyRight) // back: blue
+	}
+	if a.objs[0].FG != "red" || a.objs[0].BG != "blue" {
+		t.Fatalf("live preview: %+v", a.objs[0])
+	}
+	a.render()
+	if _, fg, bg := cellStyle(a, 0, 0); fg != colorOf("red") || bg != colorOf("blue") {
+		t.Fatalf("while picking, the border shows its real colors: %v %v", fg, bg)
+	}
+	ctrl(a, tcell.KeyEnter)
+	ctrl(a, tcell.KeyEscape) // deselect, to see the colors without highlight
+	a.render()
+	if _, _, bg := cellStyle(a, 2, 1); bg != colorOf("blue") {
+		t.Fatalf("a box's background fills its inside: %v", bg)
+	}
+	if r, fg, _ := cellStyle(a, 4, 2); r != 'H' || fg != colorOf("red") {
+		t.Fatalf("the label takes the text color: %q %v", r, fg)
+	}
+	if _, _, bg := cellStyle(a, 20, 2); bg == colorOf("blue") {
+		t.Fatal("the background stays inside the box")
+	}
+	// Saved by name, ignored by the export.
+	data := string(must(encodeYAML(a.objs)))
+	if !strings.Contains(data, "fg: red") || !strings.Contains(data, "bg: blue") {
+		t.Fatalf("yaml:\n%s", data)
+	}
+	back, err := decodeYAML([]byte(data))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("round trip: %v", err)
+	}
+	if strings.ContainsAny(markdown(a.ascii()), "\x1b") || !strings.Contains(markdown(a.ascii()), "Hi") {
+		t.Fatal("the export is plain text")
+	}
+	if _, err := decodeYAML([]byte("objects:\n  - kind: box\n    fg: chartreuse\n")); err == nil {
+		t.Fatal("an unknown color should be an error")
+	}
+	// Esc in the picker puts the old colors back; Enter's change undoes in one step.
+	click(a, 0, 0)
+	typeStr(a, "C")
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyEscape)
+	if a.objs[0].FG != "red" || a.colors != nil {
+		t.Fatalf("Esc should undo the picking: %+v", a.objs[0])
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[0].FG != "" || a.objs[0].BG != "" {
+		t.Fatalf("one undo takes the colors off: %+v", a.objs[0])
+	}
+}
+
+func TestPickerMouseAndMany(t *testing.T) {
+	a := threeBoxes(t)
+	click(a, 0, 0)
+	shiftClick(a, 10, 0)
+	typeStr(a, "C")
+	x0, y0, _, _ := a.pickerBox()
+	click(a, x0+8+3*4, y0+1) // the green swatch in the text row
+	if a.objs[0].FG != "green" || a.objs[1].FG != "green" || a.objs[2].FG != "" {
+		t.Fatalf("a click colors every selected shape: %+v", a.objs)
+	}
+	click(a, 1, 25) // outside: keeps the colors
+	if a.colors != nil || a.objs[0].FG != "green" {
+		t.Fatal("a click outside the picker keeps what was picked")
+	}
+	if len(a.objs) != 3 {
+		t.Fatal("clicks in the picker must not draw")
+	}
+	ctrl(a, tcell.KeyEscape) // nothing selected now
+	typeStr(a, "C")
+	if !a.msgErr || a.colors != nil {
+		t.Fatal("C with nothing selected should explain")
+	}
+}

@@ -81,11 +81,12 @@ type app struct {
 	clip      []object // what ^C copied, moved to 0,0
 	clipText  string   // its picture, as put on the system clipboard
 	showPanel bool
-	help      bool   // the ? screen is open
-	dropAt    int    // panel row a dragged row would land on, or -1
-	panelTop  int    // first object shown in the panel
-	suggest   string // name offered by the first save of an imported file
-	exported  string // where the last ^E export went
+	help      bool    // the ? screen is open
+	colors    *picker // the C color picker, when open
+	dropAt    int     // panel row a dragged row would land on, or -1
+	panelTop  int     // first object shown in the panel
+	suggest   string  // name offered by the first save of an imported file
+	exported  string  // where the last ^E export went
 }
 
 func newApp(s tcell.Screen) *app {
@@ -269,6 +270,10 @@ func (a *app) key(ev *tcell.EventKey) bool {
 	}
 	if a.help {
 		a.help = false
+		return false
+	}
+	if a.colors != nil {
+		a.pickerKey(ev)
 		return false
 	}
 	pending := a.confirm
@@ -604,6 +609,8 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.restack(false)
 		case '?':
 			a.help = true
+		case 'C':
+			a.openPicker()
 		}
 		return
 	}
@@ -719,6 +726,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 		if held {
 			a.help, a.swallow = false, true
 		}
+		return
+	}
+	if a.colors != nil {
+		a.pickerMouse(sx, sy, b)
+		a.swallow = held
 		return
 	}
 	cw, h := a.canvasSize()
@@ -1092,8 +1104,11 @@ func (a *app) shiftMark(o object) string {
 // objStyle colors an object's cells: held, then selected, then hovered.
 func (a *app) objStyle(i int, doomed map[int]bool) tcell.Style {
 	st := tcell.StyleDefault
+	if i >= 0 && i < len(a.objs) && a.objs[i].FG != "" {
+		st = st.Foreground(colorOf(a.objs[i].FG))
+	}
 	switch {
-	case i < 0:
+	case i < 0, a.colors != nil: // the picker shows the real colors
 	case doomed[i]:
 		st = st.Foreground(tcell.ColorRed).Bold(true)
 	case a.pressed >= 0 && a.isSel(i):
@@ -1135,6 +1150,9 @@ func (a *app) render() {
 		for sx := 0; sx < cw; sx++ {
 			x, y := sx+a.vx, sy+a.vy
 			st := a.objStyle(scene.owner(x, y), doomed)
+			if bg := scene.bgAt(x, y); bg != "" {
+				st = st.Background(colorOf(bg))
+			}
 			if d != nil && (d.mode == dErase || d.mode == dSelect) {
 				x0, x1 := order(d.x0, d.x1)
 				y0, y1 := order(d.y0, d.y1)
@@ -1212,6 +1230,9 @@ func (a *app) render() {
 	}
 	if a.help {
 		a.renderHelp()
+	}
+	if a.colors != nil {
+		a.renderPicker()
 	}
 
 	// Legend: as many items as fit.

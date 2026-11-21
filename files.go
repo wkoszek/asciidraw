@@ -34,6 +34,8 @@ type fileObject struct {
 	ID    int         `yaml:"id,omitempty"`
 	From  *fileAnchor `yaml:"from,omitempty"`
 	To    *fileAnchor `yaml:"to,omitempty"`
+	FG    string      `yaml:"fg,omitempty"`
+	BG    string      `yaml:"bg,omitempty"`
 }
 
 // fileAnchor is an attached line end: the shape's id, the side (left,
@@ -93,7 +95,7 @@ func styleIndex(name string) (int, bool) {
 func encodeYAML(objs []object) ([]byte, error) {
 	doc := fileDoc{Version: 1, Objects: []fileObject{}}
 	for _, o := range objs {
-		f := fileObject{Kind: o.Kind, Group: o.Group, ID: o.ID, From: toFileAnchor(o.From), To: toFileAnchor(o.To)}
+		f := fileObject{Kind: o.Kind, Group: o.Group, ID: o.ID, From: toFileAnchor(o.From), To: toFileAnchor(o.To), FG: o.FG, BG: o.BG}
 		if o.Kind == "text" {
 			f.X0, f.Y0, f.Text = ptr(o.X0), ptr(o.Y0), o.Text
 		} else {
@@ -126,7 +128,12 @@ func decodeYAML(data []byte) ([]object, error) {
 	}
 	var objs []object
 	for i, f := range doc.Objects {
-		o := object{Kind: f.Kind, Group: f.Group, ID: f.ID}
+		o := object{Kind: f.Kind, Group: f.Group, ID: f.ID, FG: f.FG, BG: f.BG}
+		for _, c := range []string{f.FG, f.BG} {
+			if _, ok := colorIndex(c); !ok {
+				return nil, fmt.Errorf("object %d: unknown color %q", i+1, c)
+			}
+		}
 		var err error
 		if o.From, err = fromFileAnchor(f.From); err == nil {
 			o.To, err = fromFileAnchor(f.To)

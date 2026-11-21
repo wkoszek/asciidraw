@@ -21,6 +21,8 @@ type object struct {
 	ID    int    // stable name, for lines to attach to; see connect.go
 	From  anchor // what a line's start is attached to
 	To    anchor // what a line's end is attached to
+	FG    string // text color by name, "" for the default; see color.go
+	BG    string // background color by name
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text", "fill": "Fill"}
@@ -88,6 +90,15 @@ func cloneObjs(objs []object) []object {
 
 func (o object) draw(c *canvas) {
 	st := styles[min(max(o.Style, 0), len(styles)-1)]
+	if o.BG != "" && takesBG(o.Kind) { // paint the inside first
+		x0, x1 := order(o.X0, o.X1)
+		y0, y1 := order(o.Y0, o.Y1)
+		for y := y0 + 1; y < y1; y++ {
+			for x := x0 + 1; x < x1; x++ {
+				c.paint(x, y)
+			}
+		}
+	}
 	switch o.Kind {
 	case "box":
 		drawBox(c, o.X0, o.Y0, o.X1, o.Y1, st)
@@ -126,7 +137,7 @@ func (o object) draw(c *canvas) {
 func compose(objs []object) *canvas {
 	c := &canvas{}
 	for i, o := range objs {
-		c.pen = i + 1
+		c.pen, c.bg = i+1, o.BG
 		o.draw(c)
 	}
 	return c
