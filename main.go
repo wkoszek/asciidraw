@@ -494,6 +494,12 @@ func (a *app) nudge(dx, dy int) {
 	for _, i := range sel {
 		a.objs[i].move(dx, dy)
 	}
+	// Like a drag: a nudged line checks again what its ends touch.
+	for _, i := range sel {
+		if isLine(a.objs[i].Kind) {
+			a.detect(i)
+		}
+	}
 	a.commit(before)
 }
 

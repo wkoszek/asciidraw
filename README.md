@@ -61,7 +61,9 @@ tall is about 20 columns wide.
 
 A line goes sideways from where you press, turns once, then goes up or down
 to where you let go. Drag straight across or straight down for a line with
-no turn. An arrow is the same line with a head on the end.
+no turn. An arrow is the same line with a head on the end. A line can also
+attach to shapes and follow them when they move. An attached line picks its
+own turns; see Attached lines below.
 
 ## Widgets
 
@@ -122,12 +124,58 @@ Widgets export to Markdown like everything else.
 - **Tab** and **Shift-Tab** step through the shapes. The arrow keys nudge
   the selected one.
 
-Arrows don't stay attached to boxes yet. If you move a box, move its arrows
-too.
+### Attached lines
+
+Pick Line or Arrow. Start in the empty cell just outside a shape, and end
+on another shape's edge or just outside it. Each end attaches to the shape
+it touches. While you drag, that shape lights up. Lines attach to boxes and
+widgets, and to the rectangle around an oval. Text and other lines don't
+take attachments.
+
+Don't start on the edge itself: pressing on a shape grabs the shape and
+moves it.
+
+```
+╭─────────╮
+│  Login  │────────────╮             ╭─────────╮
+╰─────────╯            │             │  Home   │
+                       ╰────────────>│         │
+                                     ╰─────────╯
+```
+
+Move or resize the shape, and the end follows. It stays on the same side, at
+the same spot along it. If the side gets too short for that spot, the end
+moves to the end of the side.
+
+The line picks its turns from where its ends are attached:
+
+- If both ends are on left or right sides, it turns twice, halfway between
+  them, as above.
+- If both ends are on tops or bottoms, it turns twice, halfway between them.
+- Otherwise it turns once.
+
+To change what a line is attached to:
+
+- Drag one of its ends onto a shape's edge, or just outside it, to attach
+  that end. If the line is in a group, click it twice first, so that it is
+  selected alone.
+- Drag an end away from its shape to detach it. Moving the whole line by
+  itself, with the mouse or the arrow keys, checks both ends again where
+  the line lands.
+- Select a line and its shapes and move them together, and the line stays
+  attached.
+- Deleting a shape detaches only that end. The line stays, and may turn
+  differently.
+- A pasted line stays attached only to shapes pasted along with it.
+
+Attachments are saved with the drawing, and undo puts them back.
+
+### The panel
 
 The panel on the right lists every shape. Hover over a row to light up its
-shape. Click a row to select its shape. Shift-click rows to add or remove shapes. **^O** hides or shows the panel. It also
-hides when the window is narrower than 72 columns.
+shape. Click a row to select its shape. Shift-click rows to add or remove
+shapes. **^O** hides or shows the panel. It also hides when the window is
+narrower than 72 columns.
 
 ## Selecting several shapes
 

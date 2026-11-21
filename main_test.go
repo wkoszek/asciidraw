@@ -1143,3 +1143,16 @@ func TestAttachmentsSaveAndPaste(t *testing.T) {
 		t.Fatalf("paste: box %+v arrow %+v", nb, na)
 	}
 }
+
+func TestNudgeAttachedLine(t *testing.T) {
+	a := joined(t)
+	click(a, 20, 2) // the arrow alone
+	ctrl(a, tcell.KeyDown)
+	if o := a.objs[2]; o.Y0 != 3 || o.Y1 != 3 || o.From.ID == 0 || o.To.ID == 0 {
+		t.Fatalf("nudged along the sides, it moves and stays attached: %+v", o)
+	}
+	ctrl(a, tcell.KeyRight)
+	if o := a.objs[2]; o.X0 != 12 || o.From.ID != 0 || o.To.ID == 0 {
+		t.Fatalf("nudged away from A, its tail lets go: %+v", o)
+	}
+}
