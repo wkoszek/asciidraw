@@ -24,17 +24,19 @@ const (
 	dMove          // moving an object
 	dResize        // dragging a box corner or a line end
 	dErase         // deleting what the rectangle touches
-	dPanel         // holding a row in the object panel
+	dPanel         // holding a row in the object panel, or a Shift-click
+	dSelect        // dragging a selection box with the Select tool
 )
 
 type drag struct {
 	mode           int
 	x0, y0, x1, y1 int
-	obj            int      // object being moved or resized
-	orig           object   // that object when the drag began
-	h              handle   // which point a resize moves
-	wasSel         bool     // object was already selected at press
-	before         []object // all objects at press, for undo
+	obj            int            // object being moved or resized
+	orig           object         // that object when the drag began
+	h              handle         // which point a resize moves
+	wasSel         bool           // object was already selected at press
+	before         []object       // all objects at press, for undo
+	origs          map[int]object // every shape a move carries, as it was
 }
 
 func (d *drag) moved() bool { return d.x0 != d.x1 || d.y0 != d.y1 }
@@ -52,9 +54,12 @@ type app struct {
 	menu   *menu
 	prompt *prompt
 
-	sel     int // selected object, or -1
-	hover   int // object under the mouse, on the canvas or in the panel
-	pressed int // object under a held mouse button
+	sel      int          // primary selected object, or -1
+	selset   map[int]bool // every selected object; see select.go
+	selFor   int          // the a.sel that selset was built for
+	lastTool int          // the tool v switches back to
+	hover    int          // object under the mouse, on the canvas or in the panel
+	pressed  int          // object under a held mouse button
 
 	typing bool // text cursor is out
 	edit   int  // text object being typed into; -1 until the first key
@@ -76,7 +81,7 @@ type app struct {
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, sel: -1, hover: -1, pressed: -1, edit: -1, showPanel: true}
+	return &app{s: s, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, showPanel: true}
 }
 
 func (a *app) reset() {
@@ -280,6 +285,12 @@ func (a *app) key(ev *tcell.EventKey) bool {
 		a.openMenu()
 	case tcell.KeyCtrlE:
 		a.export()
+	case tcell.KeyCtrlG:
+		a.stopTyping()
+		a.toggleGroup()
+	case tcell.KeyCtrlA:
+		a.stopTyping()
+		a.selectAll()
 	case tcell.KeyCtrlC:
 		a.copySel(false)
 	case tcell.KeyCtrlX:
@@ -372,7 +383,8 @@ func (a *app) stopTyping() {
 }
 
 func (a *app) startEditing(i int) {
-	a.typing, a.edit, a.typed, a.sel = true, i, false, i
+	a.typing, a.edit, a.typed = true, i, false
+	a.setSelection([]int{i}, i)
 }
 
 // cursor is where the next typed character goes.
@@ -413,6 +425,10 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.deleteSel()
 		case ' ':
 			a.toggleWidget()
+		case 'g':
+			a.toggleGroup()
+		case 'v':
+			a.toggleSelectTool()
 		}
 		return
 	}
@@ -431,6 +447,10 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 	case tcell.KeyDown:
 		a.nudge(0, 1)
 	case tcell.KeyEnter:
+		if len(a.selected()) != 1 {
+			a.sayErr("Select just one shape to edit it.")
+			return
+		}
 		switch k := a.objs[a.sel].Kind; {
 		case k == "text":
 			a.startEditing(a.sel)
@@ -440,24 +460,38 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 	}
 }
 
-// deleteSel deletes the selected shape and leaves the clipboard alone.
+// deleteSel deletes the selected shapes and leaves the clipboard alone.
 func (a *app) deleteSel() {
-	if a.sel < 0 || a.sel >= len(a.objs) {
+	sel := a.selected()
+	if len(sel) == 0 {
 		a.sayErr("Select a shape first: click it, or press Tab.")
 		return
 	}
 	before := cloneObjs(a.objs)
-	a.say("Deleted " + kindNames[a.objs[a.sel].Kind] + ".")
-	a.remove(a.sel)
+	a.say("Deleted " + a.describe(sel) + ".")
+	for k := len(sel) - 1; k >= 0; k-- {
+		a.remove(sel[k])
+	}
 	a.sel, a.hover = -1, -1
 	a.commit(before)
 }
 
+// describe names a selection for a status message: "Box" or "3 shapes".
+func (a *app) describe(idx []int) string {
+	if len(idx) == 1 {
+		return kindNames[a.objs[idx[0]].Kind]
+	}
+	return fmt.Sprintf("%d shapes", len(idx))
+}
+
 func (a *app) nudge(dx, dy int) {
+	sel := a.selected()
 	before := cloneObjs(a.objs)
-	o := &a.objs[a.sel]
-	x, y, _, _ := o.bounds()
-	o.move(max(dx, -x), max(dy, -y))
+	x, y, _, _ := selBounds(a.objs, sel)
+	dx, dy = max(dx, -x), max(dy, -y)
+	for _, i := range sel {
+		a.objs[i].move(dx, dy)
+	}
 	a.commit(before)
 }
 
@@ -534,7 +568,14 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 		a.stopTyping()
 		a.drag = &drag{mode: dPanel, obj: -1}
 		if i := a.panelItemAt(sx, sy); i >= 0 {
-			a.sel, a.pressed = i, i
+			if a.shift {
+				a.toggleSel(i)
+			} else {
+				a.setSelection(a.groupOf(i), i)
+			}
+			if a.isSel(i) {
+				a.pressed = i
+			}
 		}
 	case sy >= h: // status bar or legend
 		a.swallow = true
@@ -553,9 +594,10 @@ func (a *app) press(x, y int, right bool) {
 		d.mode = dErase
 		return
 	}
-	// The selected shape's handles come first. An oval's corners are empty
-	// cells, so this is the only way to grab them.
-	if i := a.sel; i >= 0 && i < len(a.objs) {
+	// A lone selected shape's handles come first. An oval's corners are
+	// empty cells, so this is the only way to grab them.
+	if sel := a.selected(); len(sel) == 1 {
+		i := sel[0]
 		if hd := a.objs[i].handleAt(x, y); hd.ok {
 			d.mode, d.obj, d.orig, d.h, d.wasSel = dResize, i, a.objs[i].clone(), hd, true
 			a.pressed = i
@@ -563,11 +605,32 @@ func (a *app) press(x, y int, right bool) {
 		}
 	}
 	if i := compose(a.objs).owner(x, y); i >= 0 {
-		d.mode, d.obj, d.orig, d.wasSel = dMove, i, a.objs[i].clone(), a.sel == i
-		if hd := a.objs[i].handleAt(x, y); hd.ok {
-			d.mode, d.h = dResize, hd
+		if a.shift { // Shift-click adds or removes; it never drags
+			d.mode = dPanel
+			a.toggleSel(i)
+			return
 		}
-		a.sel, a.pressed = i, i
+		d.wasSel = a.isSel(i)
+		if !d.wasSel {
+			a.sel = i // selects the shape, and its group
+		}
+		a.syncSel()
+		a.sel, a.selFor = i, i // i is the primary; keep the rest selected
+		d.mode, d.obj, d.orig = dMove, i, a.objs[i].clone()
+		if sel := a.selected(); len(sel) == 1 {
+			if hd := a.objs[i].handleAt(x, y); hd.ok {
+				d.mode, d.h = dResize, hd
+			}
+		}
+		d.origs = map[int]object{}
+		for _, j := range a.selected() {
+			d.origs[j] = a.objs[j].clone()
+		}
+		a.pressed = i
+		return
+	}
+	if a.tool == toolSelect {
+		d.mode = dSelect
 		return
 	}
 	d.mode = dCreate
@@ -579,10 +642,16 @@ func (a *app) dragTo(x, y int) {
 	d.x1, d.y1 = x, y
 	switch d.mode {
 	case dMove:
-		o := d.orig.clone()
-		bx, by, _, _ := o.bounds()
-		o.move(max(x-d.x0, -bx), max(y-d.y0, -by))
-		a.objs[d.obj] = o
+		dx, dy := x-d.x0, y-d.y0
+		for _, o := range d.origs { // nothing may cross the top or left edge
+			bx, by, _, _ := o.bounds()
+			dx, dy = max(dx, -bx), max(dy, -by)
+		}
+		for j, o := range d.origs {
+			o = o.clone()
+			o.move(dx, dy)
+			a.objs[j] = o
+		}
 	case dResize:
 		o := d.orig.clone()
 		if a.shift && o.squarable() {
@@ -634,9 +703,23 @@ func (a *app) release() {
 	switch d.mode {
 	case dMove, dResize:
 		a.objs[d.obj].normalize()
-		// A second click on selected text goes back to typing in it.
-		if !a.commit(d.before) && d.wasSel && a.objs[d.obj].Kind == "text" {
+		if a.commit(d.before) || !d.wasSel {
+			return
+		}
+		// A click, with no drag, on something already selected: out of a
+		// group or a bigger selection it picks just that shape; on lone
+		// text it goes back to typing.
+		switch {
+		case len(a.selected()) > 1:
+			a.setSelection([]int{d.obj}, d.obj)
+		case a.objs[d.obj].Kind == "text":
 			a.startEditing(d.obj)
+		}
+	case dSelect:
+		if d.moved() {
+			a.selectIn(d.x0, d.y0, d.x1, d.y1, a.shift)
+		} else if !a.shift {
+			a.sel = -1
 		}
 	case dCreate:
 		if !d.moved() && !a.widgetTool() {
@@ -679,7 +762,10 @@ func (a *app) text(x, y int, s string, st tcell.Style) int {
 func (a *app) readout() string {
 	if d := a.drag; d != nil {
 		switch d.mode {
-		case dMove, dResize:
+		case dMove:
+			x, y, w, h := selBounds(a.objs, a.selected())
+			return fmt.Sprintf("x=%d y=%d w=%d h=%d", x, y, w, h)
+		case dResize:
 			x, y, w, h := a.objs[d.obj].bounds()
 			return fmt.Sprintf("x=%d y=%d w=%d h=%d", x, y, w, h) + a.shiftMark(a.objs[d.obj])
 		case dCreate:
@@ -689,7 +775,7 @@ func (a *app) readout() string {
 				return fmt.Sprintf("x=%d y=%d w=%d h=%d", x, y, w, h) + a.shiftMark(o)
 			}
 			fallthrough
-		case dErase:
+		case dErase, dSelect:
 			x0, x1 := order(d.x0, d.x1)
 			y0, y1 := order(d.y0, d.y1)
 			return fmt.Sprintf("x=%d y=%d w=%d h=%d", x0, y0, x1-x0+1, y1-y0+1)
@@ -713,9 +799,9 @@ func (a *app) objStyle(i int, doomed map[int]bool) tcell.Style {
 	case i < 0:
 	case doomed[i]:
 		st = st.Foreground(tcell.ColorRed).Bold(true)
-	case i == a.pressed:
+	case a.pressed >= 0 && a.isSel(i):
 		st = st.Foreground(colPressed).Bold(true)
-	case i == a.sel:
+	case a.isSel(i):
 		st = st.Foreground(colSel).Bold(true)
 	case i == a.hover:
 		st = st.Foreground(colHover)
@@ -744,18 +830,23 @@ func (a *app) render() {
 	for y := 0; y < h; y++ {
 		for x := 0; x < cw; x++ {
 			st := a.objStyle(scene.owner(x, y), doomed)
-			if d != nil && d.mode == dErase {
+			if d != nil && (d.mode == dErase || d.mode == dSelect) {
 				x0, x1 := order(d.x0, d.x1)
 				y0, y1 := order(d.y0, d.y1)
 				if x >= x0 && x <= x1 && y >= y0 && y <= y1 {
-					st = st.Background(tcell.ColorMaroon)
+					if d.mode == dErase {
+						st = st.Background(tcell.ColorMaroon)
+					} else {
+						st = st.Background(tcell.PaletteColor(24)) // selection box: blue
+					}
 				}
 			}
 			s.SetContent(x, y, scene.get(x, y), nil, st)
 		}
 	}
 	// A selected oval shows its corners, since that is where it resizes.
-	if i := a.sel; i >= 0 && i < len(a.objs) && a.objs[i].Kind == "oval" {
+	if sel := a.selected(); len(sel) == 1 && a.objs[sel[0]].Kind == "oval" {
+		i := sel[0]
 		o := a.objs[i]
 		for _, p := range [][2]int{{o.X0, o.Y0}, {o.X1, o.Y0}, {o.X0, o.Y1}, {o.X1, o.Y1}} {
 			if p[0] < cw && p[1] < h && scene.get(p[0], p[1]) == ' ' {
@@ -790,16 +881,21 @@ func (a *app) render() {
 			ps = bar.Foreground(tcell.ColorYellow).Bold(true)
 		}
 		x = a.text(x+2, sh-2, "drag: "+tools[a.previewTool()].name+"  "+styles[a.previewStyle()].sample(), ps)
-		if a.msg != "" {
+		// Position readout, right-aligned. The message gets the room between.
+		pos := a.readout()
+		posX := max(sw-runeLen(pos)-1, 0)
+		if room := posX - (x + 3) - 2; a.msg != "" && room > 1 {
 			ms := bar.Foreground(tcell.ColorLightGreen).Bold(true)
 			if a.msgErr {
 				ms = bar.Foreground(tcell.ColorYellow).Bold(true)
 			}
-			a.text(x+3, sh-2, a.msg, ms)
+			msg := a.msg
+			if runeLen(msg) > room {
+				msg = string([]rune(msg)[:room-1]) + "…"
+			}
+			a.text(x+3, sh-2, msg, ms)
 		}
-		// Position readout, right-aligned. Drawn last so it stays visible.
-		pos := a.readout()
-		a.text(max(sw-len(pos)-1, 0), sh-2, pos, bar.Foreground(tcell.ColorAqua).Bold(true))
+		a.text(posX, sh-2, pos, bar.Foreground(tcell.ColorAqua).Bold(true))
 		if a.typing && a.menu == nil {
 			s.ShowCursor(a.cursor())
 		}

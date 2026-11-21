@@ -28,10 +28,10 @@ under a third heading, "Widgets".
 
 ## 3. Select several shapes
 
-- [ ] Drag a rectangle around shapes to select them.
-- [ ] Shift-click to add a shape to the selection.
-- [ ] Move, copy, cut and delete the whole selection.
-- [ ] Group, so a dialog and its buttons move as one piece.
+- [x] Drag a rectangle around shapes to select them.
+- [x] Shift-click to add a shape to the selection.
+- [x] Move, copy, cut and delete the whole selection.
+- [x] Group, so a dialog and its buttons move as one piece.
 
 ## 4. Arrows that stay attached
 

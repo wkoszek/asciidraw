@@ -31,27 +31,34 @@ func cleanText(s string) string {
 }
 
 func (a *app) copySel(cut bool) {
-	if a.sel < 0 || a.sel >= len(a.objs) {
+	a.stopTyping()
+	sel := a.selected()
+	if len(sel) == 0 {
 		a.sayErr("Select a shape first: click it, or press Tab.")
 		return
 	}
-	a.stopTyping()
-	o := a.objs[a.sel].clone()
-	x, y, _, _ := o.bounds()
-	o.move(-x, -y) // stored at 0,0; ^V moves it to the mouse
-	a.clip = []object{o}
+	x, y, _, _ := selBounds(a.objs, sel)
+	a.clip = nil
+	for _, i := range sel {
+		o := a.objs[i].clone()
+		o.move(-x, -y) // stored from 0,0; paste moves it to the mouse
+		a.clip = append(a.clip, o)
+	}
 	a.clipText = cleanText(compose(a.clip).String())
 	onSystem := clipWrite(a.clipText+"\n") == nil
+	what := a.describe(sel)
 
 	verb := "Copied"
 	if cut {
 		verb = "Cut"
 		before := cloneObjs(a.objs)
-		a.remove(a.sel)
+		for k := len(sel) - 1; k >= 0; k-- {
+			a.remove(sel[k])
+		}
 		a.sel, a.hover = -1, -1
 		a.commit(before)
 	}
-	msg := verb + " " + kindNames[o.Kind] + "."
+	msg := verb + " " + what + "."
 	if onSystem {
 		msg += " Its picture is on the clipboard too."
 	}
@@ -72,14 +79,24 @@ func (a *app) paste() {
 	a.stopTyping()
 	before := cloneObjs(a.objs)
 	x, y := a.mx, a.my
+	// Pasted groups stay groups, but new ones, apart from the originals.
+	newGroup, next := map[int]int{}, a.nextGroup()
+	var added []int
 	for _, o := range a.clip {
 		o = o.clone()
 		o.move(x, y)
+		if o.Group != 0 {
+			if newGroup[o.Group] == 0 {
+				newGroup[o.Group], next = next, next+1
+			}
+			o.Group = newGroup[o.Group]
+		}
 		a.objs = append(a.objs, o)
+		added = append(added, len(a.objs)-1)
 	}
-	a.sel = len(a.objs) - 1
+	a.setSelection(added, added[len(added)-1])
 	a.commit(before)
-	a.say(fmt.Sprintf("Pasted %s at %d,%d.", kindNames[a.clip[0].Kind], x, y))
+	a.say(fmt.Sprintf("Pasted %s at %d,%d.", a.describe(added), x, y))
 }
 
 // pasteText types text from the clipboard: into the text being typed, or

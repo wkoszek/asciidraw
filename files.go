@@ -30,6 +30,7 @@ type fileObject struct {
 	Y1    *int     `yaml:"y1,omitempty"`
 	Text  []string `yaml:"text,omitempty"`
 	Value *int     `yaml:"value,omitempty"`
+	Group int      `yaml:"group,omitempty"`
 }
 
 // hasValue lists the widgets whose state is worth writing down.
@@ -59,7 +60,7 @@ func styleIndex(name string) (int, bool) {
 func encodeYAML(objs []object) ([]byte, error) {
 	doc := fileDoc{Version: 1, Objects: []fileObject{}}
 	for _, o := range objs {
-		f := fileObject{Kind: o.Kind}
+		f := fileObject{Kind: o.Kind, Group: o.Group}
 		if o.Kind == "text" {
 			f.X0, f.Y0, f.Text = ptr(o.X0), ptr(o.Y0), o.Text
 		} else {
@@ -92,7 +93,7 @@ func decodeYAML(data []byte) ([]object, error) {
 	}
 	var objs []object
 	for i, f := range doc.Objects {
-		o := object{Kind: f.Kind}
+		o := object{Kind: f.Kind, Group: f.Group}
 		switch f.Kind {
 		case "text":
 			o.X0, o.Y0, o.Text = val(f.X0), val(f.Y0), f.Text

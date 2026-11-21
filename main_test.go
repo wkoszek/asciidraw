@@ -292,6 +292,7 @@ func TestMenuPicksToolAndStyle(t *testing.T) {
 		t.Fatalf("Space should pick and stay open: tool=%d", a.tool)
 	}
 	ctrl(a, tcell.KeyDown) // Erase
+	ctrl(a, tcell.KeyDown) // Select
 	ctrl(a, tcell.KeyDown) // ascii
 	ctrl(a, tcell.KeyDown) // line
 	if a.previewStyle() != 1 || a.style != 0 {
@@ -827,4 +828,176 @@ func TestMenuWidgetsColumn(t *testing.T) {
 		t.Fatalf("clicking the Radio row should pick it: %q", tools[a.tool].kind)
 	}
 	a.render()
+}
+
+func shiftClick(a *app, x, y int) {
+	a.mouse(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModShift))
+	a.mouse(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModShift))
+}
+
+// threeBoxes draws boxes at x=0, 10 and 20 and leaves nothing selected.
+func threeBoxes(t *testing.T) *app {
+	a := testAppSized(t, 100, 30)
+	for _, x := range []int{0, 10, 20} {
+		drag2(a, x, 0, x+4, 2)
+	}
+	ctrl(a, tcell.KeyEscape)
+	return a
+}
+
+func TestShiftClickAndMoveMany(t *testing.T) {
+	a := threeBoxes(t)
+	click(a, 0, 0)
+	shiftClick(a, 10, 0)
+	if got := a.selected(); !reflect.DeepEqual(got, []int{0, 1}) {
+		t.Fatalf("shift-click: %v", got)
+	}
+	shiftClick(a, 10, 0) // and out again
+	shiftClick(a, 10, 0)
+
+	// Drag one of them: both move, the third stays.
+	drag2(a, 2, 0, 2, 5)
+	if a.objs[0].Y0 != 5 || a.objs[1].Y0 != 5 || a.objs[2].Y0 != 0 {
+		t.Fatalf("move many: %+v", a.objs)
+	}
+	ctrl(a, tcell.KeyLeft) // box 0 is at the left edge, so nothing moves
+	if a.objs[1].X0 != 10 {
+		t.Fatal("nudge must not push the selection off the left edge")
+	}
+	ctrl(a, tcell.KeyRight)
+	if a.objs[0].X0 != 1 || a.objs[1].X0 != 11 {
+		t.Fatalf("nudge many: %+v", a.objs)
+	}
+	ctrl(a, tcell.KeyEnter)
+	if !a.msgErr {
+		t.Fatal("Enter with two shapes selected should say to pick one")
+	}
+	typeStr(a, "x")
+	if len(a.objs) != 1 || a.objs[0].X0 != 20 {
+		t.Fatalf("x should delete both: %+v", a.objs)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 3 {
+		t.Fatal("one undo should bring both back")
+	}
+}
+
+func TestSelectTool(t *testing.T) {
+	a := threeBoxes(t)
+	typeStr(a, "v")
+	if a.tool != toolSelect {
+		t.Fatalf("v should pick Select: %d", a.tool)
+	}
+	// A box around the first two, and partly over the third. It starts on
+	// empty space: starting on a shape would grab that shape instead.
+	drag2(a, 23, 3, 0, 0)
+	if got := a.selected(); !reflect.DeepEqual(got, []int{0, 1}) {
+		t.Fatalf("select box: %v", got)
+	}
+	// Shift adds; a plain click on empty space clears.
+	a.mouse(tcell.NewEventMouse(19, 0, tcell.Button1, tcell.ModShift))
+	a.mouse(tcell.NewEventMouse(30, 5, tcell.Button1, tcell.ModShift))
+	a.mouse(tcell.NewEventMouse(30, 5, tcell.ButtonNone, tcell.ModShift))
+	if len(a.selected()) != 3 {
+		t.Fatalf("shift select box: %v", a.selected())
+	}
+	click(a, 50, 20)
+	if len(a.selected()) != 0 || a.typing || len(a.objs) != 3 {
+		t.Fatal("a click on empty space with Select clears, and draws nothing")
+	}
+	typeStr(a, "v")
+	if a.tool != toolBox {
+		t.Fatal("v again goes back to the last tool")
+	}
+	ctrl(a, tcell.KeyCtrlA)
+	if len(a.selected()) != 3 {
+		t.Fatal("^A selects everything")
+	}
+}
+
+func TestGroups(t *testing.T) {
+	a := threeBoxes(t)
+	typeStr(a, "g")
+	if !a.msgErr {
+		t.Fatal("g with nothing selected should explain")
+	}
+	click(a, 0, 0)
+	shiftClick(a, 10, 0)
+	typeStr(a, "g")
+	if a.objs[0].Group == 0 || a.objs[0].Group != a.objs[1].Group || a.objs[2].Group != 0 {
+		t.Fatalf("group: %+v", a.objs)
+	}
+	ctrl(a, tcell.KeyEscape)
+
+	// One click on a member selects the group; a second picks just it.
+	click(a, 10, 0)
+	if got := a.selected(); !reflect.DeepEqual(got, []int{0, 1}) {
+		t.Fatalf("click a member: %v", got)
+	}
+	click(a, 10, 0)
+	if got := a.selected(); !reflect.DeepEqual(got, []int{1}) {
+		t.Fatalf("second click: %v", got)
+	}
+	// Dragging a member moves the group.
+	ctrl(a, tcell.KeyEscape)
+	drag2(a, 12, 0, 12, 3)
+	if a.objs[0].Y0 != 3 || a.objs[1].Y0 != 3 {
+		t.Fatalf("move group: %+v", a.objs)
+	}
+
+	// Copy and paste: the copy is a new group of its own.
+	fakeClipboard(t)
+	typeStr(a, "y")
+	press(a, 40, 10, tcell.ButtonNone)
+	typeStr(a, "p")
+	g0, g1 := a.objs[0].Group, a.objs[3].Group
+	if len(a.objs) != 5 || g1 == 0 || g1 == g0 || a.objs[4].Group != g1 || a.objs[3].X0 != 40 {
+		t.Fatalf("paste group: %+v", a.objs)
+	}
+	// It survives a save.
+	back, err := decodeYAML(must(encodeYAML(a.objs)))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("yaml: %v %+v", err, back)
+	}
+
+	// g on a whole group ungroups it.
+	click(a, 0, 3)
+	typeStr(a, "g")
+	if a.objs[0].Group != 0 || a.objs[1].Group != 0 {
+		t.Fatalf("ungroup: %+v", a.objs)
+	}
+	a.render()
+}
+
+func TestPanelShiftClick(t *testing.T) {
+	a := threeBoxes(t)
+	px := 100 - panelW + 3
+	click(a, px, 1)
+	a.mouse(tcell.NewEventMouse(px, 3, tcell.Button1, tcell.ModShift))
+	if a.pressed != 2 {
+		t.Fatalf("held row: %d", a.pressed)
+	}
+	a.render()
+	a.mouse(tcell.NewEventMouse(px, 3, tcell.ButtonNone, tcell.ModShift))
+	if got := a.selected(); !reflect.DeepEqual(got, []int{0, 2}) {
+		t.Fatalf("panel shift-click: %v", got)
+	}
+}
+
+func TestStatusMessageFits(t *testing.T) {
+	a := testAppSized(t, 60, 12)
+	a.say(strings.Repeat("long message ", 10))
+	a.render()
+	s := a.s.(tcell.SimulationScreen)
+	cells, w, h := s.GetContents()
+	var b strings.Builder
+	for x := 0; x < w; x++ {
+		if r := cells[(h-2)*w+x].Runes; len(r) > 0 {
+			b.WriteRune(r[0])
+		}
+	}
+	line := strings.TrimRight(b.String(), " ")
+	if !strings.HasSuffix(line, "x=0 y=0") || !strings.Contains(line, "…") {
+		t.Fatalf("status line: %q", line)
+	}
 }

@@ -17,6 +17,7 @@ type object struct {
 	Style int // index into styles
 	Text  []string
 	Value int // widget state: checked, active tab, or percent
+	Group int // shapes with the same nonzero Group move and select together
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text"}

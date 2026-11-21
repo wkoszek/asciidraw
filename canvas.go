@@ -86,10 +86,11 @@ const (
 	toolLine
 	toolArrow
 	toolErase
+	toolSelect
 )
 
 // shapeTools is how many of the tools are shapes; the rest are widgets.
-const shapeTools = toolErase + 1
+const shapeTools = toolSelect + 1
 
 var tools = []struct{ name, kind, help string }{
 	{"Box", "box", "drag a box, Shift: square"},
@@ -97,6 +98,7 @@ var tools = []struct{ name, kind, help string }{
 	{"Line", "line", "drag a line, bends once"},
 	{"Arrow", "arrow", "line with a head"},
 	{"Erase", "", "drag to delete objects"},
+	{"Select", "", "drag a box to select (v)"},
 	{"Button", "button", "[ OK ]"},
 	{"Check", "checkbox", "[x] Remember me"},
 	{"Radio", "radio", "(•) Option"},

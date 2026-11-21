@@ -24,10 +24,10 @@ func (a *app) panelWidth() int {
 	return panelW
 }
 
-// panelRows is how many object rows fit: border, a blank line and three help lines.
+// panelRows is how many object rows fit: border, a blank line and four help lines.
 func (a *app) panelRows() int {
 	_, h := a.canvasSize()
-	return max(h-6, 0)
+	return max(h-7, 0)
 }
 
 func (a *app) inPanel(sx, sy int) bool {
@@ -117,17 +117,22 @@ func (a *app) renderPanel() {
 	for r := 0; r < rows && a.panelTop+r < len(a.objs); r++ {
 		i := a.panelTop + r
 		st := tcell.StyleDefault
-		switch i {
-		case a.pressed:
+		switch {
+		case a.pressed >= 0 && a.isSel(i):
 			st = st.Background(colPressed).Foreground(tcell.ColorBlack).Bold(true)
-		case a.sel:
+		case a.isSel(i):
 			st = st.Background(colSel).Foreground(tcell.ColorBlack)
-		case a.hover:
+		case i == a.hover || (a.hover >= 0 && a.objs[i].Group != 0 && a.objs[i].Group == a.objs[a.hover].Group):
 			st = st.Background(tcell.PaletteColor(238)).Foreground(colHover)
 		}
-		a.text(x0+1, 1+r, fit(fmt.Sprintf(" %2d %s", i+1, a.objs[i].label()), inner), st)
+		tag := "   "
+		if g := a.objs[i].Group; g != 0 {
+			tag = fmt.Sprintf("g%-2d", g)
+		}
+		a.text(x0+1, 1+r, fit(fmt.Sprintf("%2d %s %s", i+1, tag, a.objs[i].label()), inner), st)
 	}
-	if h >= 7 {
+	if h >= 8 {
+		a.text(x0+1, h-5, " ⇧click add g group v select", dim)
 		a.text(x0+1, h-4, " Tab next  x/Del delete", dim)
 		a.text(x0+1, h-3, " y copy  d cut  p paste", dim)
 		a.text(x0+1, h-2, " corner: resize  ←→↑↓ nudge", dim)
