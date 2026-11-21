@@ -280,6 +280,19 @@ others are black, red, green, yellow, blue, magenta, cyan, white and gray.
 They come from your terminal's theme, so red in one theme can look
 different in another.
 
+For any other color, press `#` in the color panel. The status bar asks for
+a hex color, with the `#` already typed. Add three or six digits and
+letters from 0-9 and a-f, such as `ff8800`, or `f80` for short, and press
+Enter. Esc cancels, and a code that isn't a color is refused.
+
+The color goes into the row you're on, Text or Back, as an extra swatch at
+the end of the row. The arrow keys can reach it again. Each row has one
+such swatch, so a second hex color replaces the first. Press Enter once
+more to keep the colors, as with any other choice.
+
+Ghostty, which supports full color, shows hex colors exactly. Terminals
+without full color support show the nearest color they have.
+
 A background fills the inside of a box or a window, and the inside of an
 oval's curve. For white letters on a blue box, set Text to white and Back
 to blue. On lines, text, fills and widgets, the background goes only behind
@@ -291,9 +304,14 @@ open the color panel, which shows the real colors while it is open. The
 panel on the right shows a small swatch next to each colored shape.
 
 Colors work in every style, ascii included. Undo takes them off in one
-step, and copy, paste and ^D keep them. They are saved in the YAML by name,
-such as `fg: red` and `bg: blue`. The Markdown export keeps the characters
-and drops the colors.
+step, and copy, paste and ^D keep them. The Markdown export keeps the
+characters and drops the colors.
+
+The YAML stores them as `fg` for the text color and `bg` for the
+background: named colors by name, such as `fg: red`, and hex colors in
+quotes, such as `fg: "#ff8800"`. Keep the quotes, since YAML reads a bare
+`#` as the start of a comment. When you edit a file by hand, `#FF8800` and
+`#f80` work too; asciidraw stores them as `#ff8800`.
 
 ### Duplicate
 

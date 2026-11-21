@@ -128,12 +128,15 @@ func decodeYAML(data []byte) ([]object, error) {
 	}
 	var objs []object
 	for i, f := range doc.Objects {
-		o := object{Kind: f.Kind, Group: f.Group, ID: f.ID, FG: f.FG, BG: f.BG}
-		for _, c := range []string{f.FG, f.BG} {
-			if _, ok := colorIndex(c); !ok {
-				return nil, fmt.Errorf("object %d: unknown color %q", i+1, c)
+		o := object{Kind: f.Kind, Group: f.Group, ID: f.ID}
+		for _, c := range []*string{&f.FG, &f.BG} {
+			name, ok := cleanColor(*c)
+			if !ok {
+				return nil, fmt.Errorf("object %d: unknown color %q", i+1, *c)
 			}
+			*c = name
 		}
+		o.FG, o.BG = f.FG, f.BG
 		var err error
 		if o.From, err = fromFileAnchor(f.From); err == nil {
 			o.To, err = fromFileAnchor(f.To)

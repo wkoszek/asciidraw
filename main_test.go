@@ -1733,3 +1733,76 @@ func TestOvalBackgroundStaysInside(t *testing.T) {
 		t.Fatal("the corners outside the curve should not be painted")
 	}
 }
+
+func TestHexColors(t *testing.T) {
+	for in, want := range map[string]string{"#FF8800": "#ff8800", "f80": "#ff8800", "#abc": "#aabbcc"} {
+		if got, ok := parseHex(in); !ok || got != want {
+			t.Errorf("parseHex(%q) = %q, %v", in, got, ok)
+		}
+	}
+	for _, bad := range []string{"#ff88", "#gggggg", "orange", ""} {
+		if _, ok := parseHex(bad); ok {
+			t.Errorf("parseHex(%q) should fail", bad)
+		}
+	}
+
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)
+	typeStr(a, "C")
+	typeStr(a, "#")
+	if a.prompt == nil {
+		t.Fatal("# in the picker asks for a hex color")
+	}
+	ctrl(a, tcell.KeyBackspace2)
+	typeStr(a, "nope")
+	ctrl(a, tcell.KeyEnter)
+	if !a.msgErr || a.objs[0].FG != "" {
+		t.Fatal("a bad hex color is refused")
+	}
+	typeStr(a, "#")
+	ctrl(a, tcell.KeyBackspace2)
+	typeStr(a, "#F80")
+	ctrl(a, tcell.KeyEnter)
+	if a.objs[0].FG != "#ff8800" || a.colors == nil {
+		t.Fatalf("hex text color, picker still open: %+v", a.objs[0])
+	}
+	// The hex slot stays in the row: step away and back to it.
+	ctrl(a, tcell.KeyRight) // wraps to the default
+	ctrl(a, tcell.KeyLeft)  // back to the hex slot
+	if a.objs[0].FG != "#ff8800" {
+		t.Fatalf("arrow back to the hex color: %q", a.objs[0].FG)
+	}
+	ctrl(a, tcell.KeyEnter)
+	ctrl(a, tcell.KeyEscape)
+	a.render()
+	if _, fg, _ := cellStyle(a, 0, 0); fg != tcell.NewHexColor(0xff8800) {
+		t.Fatalf("drawn in the hex color: %v", fg)
+	}
+	data := string(must(encodeYAML(a.objs)))
+	if !strings.Contains(data, "fg: '#ff8800'") && !strings.Contains(data, `fg: "#ff8800"`) {
+		t.Fatalf("yaml:\n%s", data)
+	}
+	back, err := decodeYAML([]byte(data))
+	if err != nil || back[0].FG != "#ff8800" {
+		t.Fatalf("round trip: %v %+v", err, back)
+	}
+	if _, err := decodeYAML([]byte("objects:\n  - kind: box\n    bg: \"#12\"\n")); err == nil {
+		t.Fatal("a broken hex color in a file is an error")
+	}
+	// Reopening the picker on a hex-colored shape starts on its hex slot.
+	click(a, 0, 0)
+	typeStr(a, "C")
+	if a.colors.cur[0] != hexSlot || a.colors.hex[0] != "#ff8800" {
+		t.Fatalf("reopen: %+v", a.colors)
+	}
+}
+
+func TestHexInFilesIsForgiving(t *testing.T) {
+	objs, err := decodeYAML([]byte("objects:\n  - kind: box\n    fg: \"#FF8800\"\n    bg: \"#0af\"\n"))
+	if err != nil || objs[0].FG != "#ff8800" || objs[0].BG != "#00aaff" {
+		t.Fatalf("hand-typed hex in a file: %v %+v", err, objs)
+	}
+	if _, err := decodeYAML([]byte("objects:\n  - kind: box\n    fg: ff8800\n")); err == nil {
+		t.Fatal("hex without # in a file is still an error")
+	}
+}
