@@ -569,6 +569,9 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 	case tcell.KeyEscape:
 		a.sel = -1
 		return
+	case tcell.KeyHome: // back to the top left of the drawing
+		a.vx, a.vy = 0, 0
+		return
 	case tcell.KeyPgUp, tcell.KeyPgDn:
 		_, h := a.canvasSize()
 		step := max(h/2, 1)

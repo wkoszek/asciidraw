@@ -50,7 +50,7 @@ In this README, `^T` means Ctrl+T.
   oval, a click starts typing that shape's label; see Labels below.
 - **Right-drag** a rectangle to delete every shape it touches. This works
   with any tool. The Erase tool does the same with a left drag.
-- **^T** opens the menu. Pick a tool (Box, Oval, Line, Arrow, Erase, Select) and a
+- **^T** opens the menu. Pick a tool (Box, Oval, Line, Arrow, Fill, Erase, Select) and a
   style (ascii, line, round, double). Use the up and down arrows to move,
   Space to pick, Enter to pick and close, and Esc to close. You can also
   click a row. The status bar shows a sample of each style before you pick
@@ -140,10 +140,13 @@ Widgets export to Markdown like everything else.
 
 ## Changing shapes
 
-- **Click** a shape to select it. Click selected text again to add to it.
-  Typing only adds and removes at the end of the text. To change the
-  middle, delete the text and type it again.
-- **Enter** on a selected box, oval or text lets you type more at the end.
+- **Click** a shape to select it. Click selected text again to type in it.
+- **Enter** on a selected box, oval or text also starts typing in it. The
+  cursor starts after the last letter.
+- **While you type,** the arrow keys move the cursor, not the shape. Home
+  and End jump to the start and end of the line. Letters go in at the
+  cursor. Backspace deletes the letter before it, and Delete the letter
+  after it. Enter in the middle of a line splits it in two.
 - **Drag** a shape's edge to move it.
 - **Drag** a box corner, or either end of a line, to resize it. An oval has
   no corners you can see, so a selected oval shows `+` where they are.
@@ -169,10 +172,11 @@ If the label outgrows the shape, the shape grows right and down to fit.
 You can't drag a shape smaller than its label. Deleting letters doesn't
 shrink it back; drag a corner for that.
 
-To change a label, click the shape once to select it, then click a letter
-of the label again. You can also select it and press Enter. Either way, you
-type at the end, as with any text. Backspace over every letter, and the
-label is gone; the shape stays.
+To change a label, click the shape to select it, then click a letter of its
+label. If the shape is in a group, click it once more first. You can also
+select it and press Enter. Either way, the cursor starts after the last
+letter, and you edit as with any text (see Changing shapes).
+Backspace over every letter, and the label is gone; the shape stays.
 
 The panel shows each label next to its shape. Widgets have labels too, but
 you edit those in the status bar; see Widgets above.
@@ -231,8 +235,37 @@ Attachments are saved with the drawing, and undo puts them back.
 
 The panel on the right lists every shape. Hover over a row to light up its
 shape. Click a row to select its shape. Shift-click rows to add or remove
-shapes. **^O** hides or shows the panel. It also hides when the window is
-narrower than 72 columns.
+shapes. Drag a row up or down to move its shape in the stacking order (see
+Stacking order below). **^O** hides or shows the panel. It also hides when
+the window is narrower than 72 columns.
+
+### Stacking order
+
+Shapes are drawn in the order of the panel's list, top to bottom, so a
+shape lower in the list covers the ones above it.
+
+- **]** moves the selected shapes to the front, which is the bottom of the
+  list. **[** moves them to the back, the top of the list. A grouped shape
+  moves with its group.
+- Drag a row down in the panel to put its shape just below the row you drop
+  it on, or up to put it just above.
+
+### Fill
+
+The Fill tool shades a rectangle: drag one, as you would a box. A new fill
+goes to the back, behind everything else. To change it, click a part of it
+that shows, or its row in the panel. Then press **Space** for the next
+shade, `░ ▒ ▓ █`, or `t` to switch between those and the ascii shades
+`. : % #`. A fill never blocks clicks meant for a box on top of it: a click
+inside the box still types the box's label.
+
+### Duplicate
+
+**^D** copies the selected shapes and puts the copy two columns right and
+one row down. Don't confuse it with `d`, which cuts. The copies are
+selected, so you can drag them where they go. Copied groups and lines
+attached among the copies stay that way. Duplicating doesn't touch the
+clipboard, so what you copied with `y` is still there.
 
 ## Selecting several shapes
 
@@ -282,6 +315,7 @@ When you are not typing, these letters work as commands:
 | `g` | group, or ungroup | ^G |
 | `v` | switch to the Select tool; press again to go back | |
 | `t` | change the style of the selected shapes: ascii, line, round, double | |
+| `]` / `[` | bring to the front / send to the back | |
 
 They come from vim. Press Esc first if you are typing.
 
@@ -299,10 +333,45 @@ If you are typing, it goes into the text instead.
 | ^T | tools and styles |
 | ^A | select everything |
 | ^O | show or hide the panel |
+| ^D | duplicate the selected shapes |
 | ^Q | quit |
+| `?` | show the keys on one screen |
 
 If you have unsaved changes, ^N and ^Q warn you. Press the key again to go
 ahead.
+
+## Scrolling
+
+The drawing can be bigger than the window, and has no size limit.
+
+- Over the drawing, the mouse wheel scrolls up and down, and Shift with the
+  wheel scrolls sideways. Over the panel, the wheel scrolls its list.
+- When you aren't typing, PgUp and PgDn scroll by half a window, and Home
+  goes back to the top left.
+- When you drag to the window's edge, the view scrolls with you, so you can
+  keep drawing past it. While you type, the view follows the cursor.
+
+When the view isn't at the top left, the status bar shows the column and row
+at the window's corner, such as `view 3,6`.
+
+## Autosave
+
+Every 30 seconds, asciidraw writes any unsaved changes to a recovery copy.
+It also writes one when the terminal tells it the window is closing. If it
+crashes, you lose at most the last 30 seconds of work. Your drawing's own
+file only changes when you press ^S.
+
+The next time you open the same drawing, asciidraw finds the copy, loads
+it, and says so. Press ^S to keep the changes. Saving deletes the copy.
+
+Quitting with ^Q twice, or starting over with ^N twice, throws the unsaved
+changes away for good and deletes the copy too.
+
+On macOS the copies live in `~/Library/Caches/asciidraw/recover/`, and on
+Linux in `~/.cache/asciidraw/recover/`. An untitled drawing has one copy,
+`untitled.yaml`, which comes back the next time you start asciidraw with no
+file. Two untitled sessions at once share that copy, and the last one to
+write it wins.
 
 ## Files
 

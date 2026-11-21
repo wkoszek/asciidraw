@@ -1503,8 +1503,7 @@ func TestScrolling(t *testing.T) {
 	if got := a.readout(); !strings.HasPrefix(got, "view 3,6") {
 		t.Fatalf("readout shows the view: %q", got)
 	}
-	ctrl(a, tcell.KeyPgUp)
-	a.mouse(tcell.NewEventMouse(5, 5, tcell.WheelUp, tcell.ModShift))
+	ctrl(a, tcell.KeyHome)
 	if a.vx != 0 || a.vy != 0 {
 		t.Fatalf("back to the top left: %d,%d", a.vx, a.vy)
 	}
