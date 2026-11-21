@@ -49,7 +49,7 @@ In this README, `^T` means Ctrl+T.
   typing. With the Erase tool, a click deletes instead.
 - **Right-drag** a rectangle to delete every shape it touches. This works
   with any tool. The Erase tool does the same with a left drag.
-- **^T** opens the menu. Pick a tool (Box, Oval, Line, Arrow, Erase) and a
+- **^T** opens the menu. Pick a tool (Box, Oval, Line, Arrow, Erase, Select) and a
   style (ascii, line, round, double). Use the up and down arrows to move,
   Space to pick, Enter to pick and close, and Esc to close. You can also
   click a row. The status bar shows a sample of each style before you pick
@@ -104,7 +104,8 @@ they are.
 
 A window's inside is empty space. To draw in it, switch to a drawing tool
 such as Box first; with the Window tool still picked, a click places another
-window. Shapes inside a window don't move when you move the window.
+window. Shapes inside a window don't move with it unless you group them
+with the window (see Groups below).
 
 A new widget uses the style picked in the menu, and keeps it. In the ascii
 style it uses only plain characters, such as `#` and `.` for a progress bar.
@@ -125,12 +126,47 @@ Arrows don't stay attached to boxes yet. If you move a box, move its arrows
 too.
 
 The panel on the right lists every shape. Hover over a row to light up its
-shape. Click a row to select it. **^O** hides or shows the panel. It also
+shape. Click a row to select its shape. Shift-click rows to add or remove shapes. **^O** hides or shows the panel. It also
 hides when the window is narrower than 72 columns.
+
+## Selecting several shapes
+
+- **Shift-click** a shape to add it to the selection. Shift-click it again
+  to take it out. This doesn't work with the Erase tool, where a click
+  deletes.
+- **v** switches to the Select tool. Start on empty space and drag a
+  rectangle around the shapes you want. Every shape fully inside it gets
+  selected. This replaces the selection, unless you hold Shift to add to
+  it. Press **v** again to go back to your last tool.
+- **^A** selects everything. **Esc** clears the selection. If you are
+  typing, the first Esc stops typing and the second clears.
+
+Dragging any selected shape moves all of them, and the arrow keys nudge all
+of them. `y` copies them, `d` cuts them, and `x` deletes them. `p` pastes
+what you copied at the mouse. To resize a shape, select it alone.
+
+### Groups
+
+Select two or more shapes and press **g** to group them. After that, the
+group acts as one piece:
+
+- A click on any shape in the group selects the whole group, so a window
+  and its buttons move together.
+- Shift-click adds or removes the whole group.
+- The panel tags each shape in a group, such as `g1`.
+
+To change one shape in a group, click it once to select the group, then
+click it again. Now only that shape is selected. It stays in the group, but
+you can move, resize or edit it alone.
+
+To ungroup, select one whole group and press **g**. If the selection mixes
+a group with other shapes, **g** makes one new group of all of them. Groups
+don't nest. Groups are saved with the drawing, and a pasted copy of a group
+is a new group.
 
 ## Keys
 
-When you are not typing, these letters work on the selected shape:
+When you are not typing, these letters work as commands:
 
 | Key | Does | Same as |
 |---|---|---|
@@ -138,6 +174,8 @@ When you are not typing, these letters work on the selected shape:
 | `d` | cut | ^X |
 | `p` | paste where the mouse is | ^V |
 | `x` | delete, and leave the clipboard alone | Del |
+| `g` | group, or ungroup | ^G |
+| `v` | switch to the Select tool; press again to go back | |
 
 They come from vim. Press Esc first if you are typing.
 
@@ -153,6 +191,7 @@ If you are typing, it goes into the text instead.
 | ^N | new drawing |
 | ^Z / ^Y | undo / redo |
 | ^T | tools and styles |
+| ^A | select everything |
 | ^O | show or hide the panel |
 | ^Q | quit |
 
