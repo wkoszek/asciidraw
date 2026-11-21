@@ -46,7 +46,8 @@ In this README, `^T` means Ctrl+T.
 
 - **Drag** on empty space to draw with the current tool.
 - **Click** on empty space to type. Enter starts a new line. Esc stops
-  typing. With the Erase tool, a click deletes instead.
+  typing. With the Erase tool, a click deletes instead. Inside a box or an
+  oval, a click starts typing that shape's label; see Labels below.
 - **Right-drag** a rectangle to delete every shape it touches. This works
   with any tool. The Erase tool does the same with a left drag.
 - **^T** opens the menu. Pick a tool (Box, Oval, Line, Arrow, Erase, Select) and a
@@ -118,11 +119,43 @@ Widgets export to Markdown like everything else.
 - **Click** a shape to select it. Click selected text again to add to it.
   Typing only adds and removes at the end of the text. To change the
   middle, delete the text and type it again.
+- **Enter** on a selected box, oval or text lets you type more at the end.
 - **Drag** a shape's edge to move it.
 - **Drag** a box corner, or either end of a line, to resize it. An oval has
   no corners you can see, so a selected oval shows `+` where they are.
 - **Tab** and **Shift-Tab** step through the shapes. The arrow keys nudge
   the selected one.
+
+### Labels
+
+A box or an oval can have a label. With Box, Oval, Line or Arrow picked,
+click the empty space inside the shape and type. Enter starts a new line
+and Esc stops typing. The label sits in the middle of the shape. Move, copy
+or delete the shape, and the label goes with it.
+
+```
++-----------+
+|           |
+|    OK     |
+|           |
++-----------+
+```
+
+If the label outgrows the shape, the shape grows right and down to fit.
+You can't drag a shape smaller than its label. Deleting letters doesn't
+shrink it back; drag a corner for that.
+
+To change a label, click the shape once to select it, then click a letter
+of the label again. You can also select it and press Enter. Either way, you
+type at the end, as with any text. Backspace over every letter, and the
+label is gone; the shape stays.
+
+The panel shows each label next to its shape. Widgets have labels too, but
+you edit those in the status bar; see Widgets above.
+
+To add text that isn't part of the shape, Shift-click the empty space
+inside it. That text is a shape of its own, and it doesn't move with the box
+unless you group them (see Groups below).
 
 ### Attached lines
 
@@ -262,12 +295,19 @@ objects:
     y0: 1
     x1: 24
     y1: 6
-  - kind: text
-    x0: 5
-    y0: 3
     text:
       - Login
+    id: 1
+  - kind: text
+    x0: 4
+    y0: 8
+    text:
+      - Forgot password?
+    id: 2
 ```
+
+The box's `text` is its label. The second entry is text on its own. The
+`id` names a shape, so that lines can say what they are attached to.
 
 **^E** writes the picture inside a code block. For `mock.yaml` it writes
 `mock.md` in the same folder. If the drawing has no name yet, it asks for
