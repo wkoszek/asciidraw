@@ -99,7 +99,7 @@ func encodeYAML(objs []object) ([]byte, error) {
 		} else {
 			f.Style = styles[min(max(o.Style, 0), len(styles)-1)].name
 			f.X0, f.Y0, f.X1, f.Y1 = ptr(o.X0), ptr(o.Y0), ptr(o.X1), ptr(o.Y1)
-			if isWidget(o.Kind) {
+			if isWidget(o.Kind) || hasLabel(o.Kind) {
 				f.Text = o.Text
 			}
 			if hasValue[o.Kind] {
@@ -150,7 +150,7 @@ func decodeYAML(data []byte) ([]object, error) {
 			}
 			o.Style = st
 			o.X0, o.Y0, o.X1, o.Y1 = val(f.X0), val(f.Y0), val(f.X1), val(f.Y1)
-			if isWidget(f.Kind) {
+			if isWidget(f.Kind) || hasLabel(f.Kind) {
 				o.Text, o.Value = f.Text, val(f.Value)
 			}
 			o.normalize()

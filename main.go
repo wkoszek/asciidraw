@@ -331,7 +331,21 @@ func (a *app) newline() {
 		return
 	}
 	a.typeSnapshot()
-	a.objs[a.edit].Text = append(a.objs[a.edit].Text, "")
+	o := &a.objs[a.edit]
+	if len(o.Text) == 0 {
+		o.Text = []string{""}
+	}
+	o.Text = append(o.Text, "")
+	a.refit()
+}
+
+// refit grows a box or oval to fit the label being typed, and moves the
+// lines attached to it.
+func (a *app) refit() {
+	if a.edit >= 0 && hasLabel(a.objs[a.edit].Kind) {
+		a.objs[a.edit].fitLabel()
+		a.reattach(nil)
+	}
 }
 
 func (a *app) typeSnapshot() {
@@ -349,8 +363,12 @@ func (a *app) typeRune(r rune) {
 		a.edit = len(a.objs) - 1
 	}
 	a.sel = a.edit
-	t := a.objs[a.edit].Text
-	t[len(t)-1] += string(r)
+	o := &a.objs[a.edit]
+	if len(o.Text) == 0 { // a box's first letter
+		o.Text = []string{""}
+	}
+	o.Text[len(o.Text)-1] += string(r)
+	a.refit()
 }
 
 func (a *app) backspace() {
@@ -359,12 +377,19 @@ func (a *app) backspace() {
 	}
 	a.typeSnapshot()
 	o := &a.objs[a.edit]
+	if len(o.Text) == 0 {
+		return
+	}
 	last := []rune(o.Text[len(o.Text)-1])
 	switch {
 	case len(last) > 0:
 		o.Text[len(o.Text)-1] = string(last[:len(last)-1])
 	case len(o.Text) > 1:
 		o.Text = o.Text[:len(o.Text)-1]
+	}
+	if len(o.Text) == 1 && o.Text[0] == "" && hasLabel(o.Kind) {
+		o.Text = nil // the label is gone; the box stays
+		return
 	}
 	if len(o.Text) == 1 && o.Text[0] == "" {
 		// Nothing left: drop the object, keep the cursor where it started.
@@ -380,6 +405,9 @@ func (a *app) stopTyping() {
 		for len(o.Text) > 1 && o.Text[len(o.Text)-1] == "" {
 			o.Text = o.Text[:len(o.Text)-1]
 		}
+		if hasLabel(o.Kind) && len(o.Text) == 1 && o.Text[0] == "" {
+			o.Text = nil
+		}
 	}
 	a.typing, a.edit = false, -1
 }
@@ -393,6 +421,9 @@ func (a *app) startEditing(i int) {
 func (a *app) cursor() (int, int) {
 	if a.edit >= 0 && a.edit < len(a.objs) {
 		o := a.objs[a.edit]
+		if hasLabel(o.Kind) {
+			return o.labelCursor()
+		}
 		return o.X0 + len([]rune(o.Text[len(o.Text)-1])), o.Y0 + len(o.Text) - 1
 	}
 	return a.cx, a.cy
@@ -456,7 +487,7 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			return
 		}
 		switch k := a.objs[a.sel].Kind; {
-		case k == "text":
+		case k == "text" || hasLabel(k):
 			a.startEditing(a.sel)
 		case isWidget(k):
 			a.editWidget()
@@ -758,6 +789,8 @@ func (a *app) release() {
 			a.setSelection([]int{d.obj}, d.obj)
 		case a.objs[d.obj].Kind == "text":
 			a.startEditing(d.obj)
+		case hasLabel(a.objs[d.obj].Kind) && a.objs[d.obj].inside(d.x0, d.y0):
+			a.startEditing(d.obj) // a second click on a box's label
 		}
 	case dSelect:
 		if d.moved() {
@@ -766,6 +799,14 @@ func (a *app) release() {
 			a.sel = -1
 		}
 	case dCreate:
+		if !d.moved() && !a.widgetTool() && !a.shift {
+			// A click inside a box types its label. Shift-click there for
+			// loose text instead.
+			if i := boxAt(a.objs, d.x0, d.y0); i >= 0 {
+				a.startEditing(i)
+				return
+			}
+		}
 		if !d.moved() && !a.widgetTool() {
 			// A click on empty space puts out the text cursor.
 			a.typing, a.edit, a.typed = true, -1, false

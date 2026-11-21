@@ -60,8 +60,10 @@ func (o object) draw(c *canvas) {
 	switch o.Kind {
 	case "box":
 		drawBox(c, o.X0, o.Y0, o.X1, o.Y1, st)
+		drawLabel(c, o)
 	case "oval":
 		drawOval(c, o.X0, o.Y0, o.X1, o.Y1, st)
+		drawLabel(c, o)
 	default:
 		if isWidget(o.Kind) {
 			drawWidget(c, o, st)
@@ -101,6 +103,7 @@ func (o *object) normalize() {
 		o.X0, o.X1 = order(o.X0, o.X1)
 		o.Y0, o.Y1 = order(o.Y0, o.Y1)
 	}
+	o.fitLabel() // a box or oval is never smaller than its label
 	if isWidget(o.Kind) {
 		o.fixSize()
 	}
@@ -155,6 +158,9 @@ func (o object) label() string {
 	switch o.Kind {
 	case "box", "oval":
 		x, y, w, h := o.bounds()
+		if len(o.Text) > 0 {
+			return fmt.Sprintf("%-6s \"%s\" %d×%d", kindNames[o.Kind], strings.Join(o.Text, " "), w, h)
+		}
 		return fmt.Sprintf("%-6s %d×%d at %d,%d", kindNames[o.Kind], w, h, x, y)
 	case "line", "arrow":
 		return fmt.Sprintf("%-6s %d,%d→%d,%d", kindNames[o.Kind], o.X0, o.Y0, o.X1, o.Y1)

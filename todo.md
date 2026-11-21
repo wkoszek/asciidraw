@@ -40,9 +40,9 @@ under a third heading, "Widgets".
 
 ## 5. Labels that belong to boxes
 
-- [ ] Text typed inside a box moves with the box.
-- [ ] Center a label in its box.
-- [ ] Grow a box to fit its label.
+- [x] Text typed inside a box moves with the box.
+- [x] Center a label in its box.
+- [x] Grow a box to fit its label.
 
 ## 6. Clean crossings
 

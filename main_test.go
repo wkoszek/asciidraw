@@ -50,10 +50,10 @@ func TestDrawTypeSave(t *testing.T) {
 	press(a, 10, 4, tcell.Button1)
 	a.render() // preview must not panic
 	press(a, 10, 4, tcell.ButtonNone)
-	click(a, 4, 2) // inside the box is empty space: starts typing
+	click(a, 4, 2) // inside the box: types the box's label
 	typeStr(a, "Hi")
-	if len(a.objs) != 2 || a.objs[1].Kind != "text" {
-		t.Fatalf("want box + text, got %+v", a.objs)
+	if len(a.objs) != 1 || !reflect.DeepEqual(a.objs[0].Text, []string{"Hi"}) {
+		t.Fatalf("want a box labeled Hi, got %+v", a.objs)
 	}
 
 	dir := t.TempDir()
@@ -80,7 +80,7 @@ func TestDrawTypeSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "```text\n\n  +-------+\n  | Hi    |\n  |       |\n  +-------+\n```\n"
+	want := "```text\n\n  +-------+\n  |  Hi   |\n  |       |\n  +-------+\n```\n"
 	if string(got) != want {
 		t.Fatalf("md got:\n%q\nwant:\n%q", got, want)
 	}
@@ -1181,5 +1181,77 @@ func TestCycleStyle(t *testing.T) {
 	ctrl(a, tcell.KeyCtrlZ)
 	if a.objs[0].Style != 3 {
 		t.Fatal("each t is one undo step")
+	}
+}
+
+func TestBoxLabel(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 12, 4)
+	click(a, 3, 2)
+	typeStr(a, "OK")
+	ctrl(a, tcell.KeyEscape)
+	if got, want := a.ascii(), "+-----------+\n|           |\n|    OK     |\n|           |\n+-----------+\n"; got != want {
+		t.Fatalf("centered:\n%s\nwant:\n%s", got, want)
+	}
+	// The label moves with the box.
+	drag2(a, 5, 0, 5, 3)
+	if a.objs[0].Y0 != 3 || len(a.objs) != 1 || !strings.Contains(a.ascii(), "|    OK     |") {
+		t.Fatalf("move:\n%s", a.ascii())
+	}
+	// A second click on the label goes back to typing in it.
+	ctrl(a, tcell.KeyEscape)
+	click(a, 5, 5) // selects the box (the click lands on the label's O)
+	click(a, 5, 5)
+	if !a.typing || a.edit != 0 {
+		t.Fatalf("second click on the label should edit: typing=%v edit=%d", a.typing, a.edit)
+	}
+	typeStr(a, " then a much longer label")
+	ctrl(a, tcell.KeyEscape)
+	o := a.objs[0]
+	if w := o.X1 - o.X0 + 1; w != runeLen(o.Text[0])+4 {
+		t.Fatalf("the box should grow to fit: width %d for %q", w, o.Text[0])
+	}
+	// It can't be dragged smaller than its label.
+	click(a, o.X1, o.Y1)
+	drag2(a, o.X1, o.Y1, 5, 4)
+	if a.objs[0].X1 != o.X1 || a.objs[0].Y1 != o.Y0+2 {
+		t.Fatalf("shrink below the label: %+v", a.objs[0])
+	}
+	// Backspacing everything clears the label and keeps the box.
+	ctrl(a, tcell.KeyEnter)
+	for range 40 {
+		ctrl(a, tcell.KeyBackspace2)
+	}
+	ctrl(a, tcell.KeyEscape)
+	if len(a.objs) != 1 || a.objs[0].Text != nil {
+		t.Fatalf("empty label: %+v", a.objs)
+	}
+}
+
+func TestShiftClickInBoxIsLooseText(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 12, 4)
+	shiftClick(a, 2, 1)
+	typeStr(a, "note")
+	if len(a.objs) != 2 || a.objs[1].Kind != "text" || a.objs[1].X0 != 2 || a.objs[0].Text != nil {
+		t.Fatalf("shift-click inside a box should type loose text: %+v", a.objs)
+	}
+}
+
+func TestLabelGrowMovesArrows(t *testing.T) {
+	a := joined(t)
+	click(a, 5, 2) // inside A
+	typeStr(a, "a label that is wider than A")
+	ctrl(a, tcell.KeyEscape)
+	o, ar := a.objs[0], a.objs[2]
+	if ar.X0 != o.X1+1 || ar.From.ID != o.ID {
+		t.Fatalf("the arrow should follow A's right side as it grows: A %+v arrow %+v", o, ar)
+	}
+	back, err := decodeYAML(must(encodeYAML(a.objs)))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("yaml: %v %+v", err, back)
+	}
+	if !strings.Contains(string(must(encodeYAML(a.objs))), "a label that is wider than A") {
+		t.Fatal("the label should be in the yaml")
 	}
 }
