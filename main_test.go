@@ -626,3 +626,46 @@ func TestCutAndDeleteKeys(t *testing.T) {
 		t.Fatal("x with nothing selected should say so")
 	}
 }
+
+func TestExportAsksBeforeOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	md := filepath.Join(dir, "ui.md")
+	os.WriteFile(md, []byte("my notes\n"), 0o644)
+	a := testApp(t)
+	a.file = filepath.Join(dir, "ui.yaml")
+	drag2(a, 0, 0, 4, 2)
+
+	ctrl(a, tcell.KeyCtrlE)
+	if a.prompt == nil {
+		t.Fatal("^E should ask before replacing ui.md")
+	}
+	typeStr(a, "n")
+	ctrl(a, tcell.KeyEnter)
+	if b, _ := os.ReadFile(md); string(b) != "my notes\n" {
+		t.Fatal("answering n must leave ui.md alone")
+	}
+
+	ctrl(a, tcell.KeyCtrlE)
+	typeStr(a, "y")
+	ctrl(a, tcell.KeyEnter)
+	if b, _ := os.ReadFile(md); !strings.Contains(string(b), "+---+") {
+		t.Fatalf("answering y should export: %q", b)
+	}
+
+	// Now it is this drawing's export: the next ^E doesn't ask.
+	drag2(a, 10, 0, 14, 2)
+	ctrl(a, tcell.KeyCtrlE)
+	if a.prompt != nil {
+		t.Fatal("second export to the same file should not ask")
+	}
+	// Saved under a new name, ^E follows it.
+	ctrl(a, tcell.KeyCtrlS) // saves to ui.yaml
+	a.file = ""
+	ctrl(a, tcell.KeyCtrlS)
+	typeStr(a, filepath.Join(dir, "other"))
+	ctrl(a, tcell.KeyEnter)
+	ctrl(a, tcell.KeyCtrlE)
+	if _, err := os.Stat(filepath.Join(dir, "other.md")); err != nil {
+		t.Fatalf("export should follow the new name: %v", err)
+	}
+}

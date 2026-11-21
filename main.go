@@ -181,17 +181,23 @@ func (a *app) askPath(label, ext, initial string, done func(string)) {
 		if e := strings.ToLower(filepath.Ext(name)); e != ext && !(ext == ".yaml" && e == ".yml") {
 			name = withExt(name, ext)
 		}
-		if _, err := os.Stat(name); err == nil {
-			a.ask(name+" exists. Overwrite? (y/n): ", "", func(ans string) {
-				if strings.HasPrefix(strings.ToLower(strings.TrimSpace(ans)), "y") {
-					done(name)
-				} else {
-					a.say("Cancelled.")
-				}
-			})
-			return
+		a.unlessExists(name, done)
+	})
+}
+
+// unlessExists calls done(path) right away if path doesn't exist, and
+// otherwise asks first.
+func (a *app) unlessExists(path string, done func(string)) {
+	if _, err := os.Stat(path); err != nil {
+		done(path)
+		return
+	}
+	a.ask(path+" exists. Overwrite? (y/n): ", "", func(ans string) {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(ans)), "y") {
+			done(path)
+		} else {
+			a.say("Cancelled.")
 		}
-		done(name)
 	})
 }
 
@@ -201,19 +207,22 @@ func (a *app) write(path string) {
 		a.sayErr("Save failed: " + err.Error())
 		return
 	}
+	if path != a.file {
+		a.exported = "" // a new name exports next to the new file
+	}
 	a.file, a.dirty, a.suggest = path, false, ""
 	a.say(fmt.Sprintf("Saved %s (%d objects)", path, len(a.objs)))
 }
 
 // export writes the picture as Markdown: next to the YAML file if there is
-// one, or under a name it asks for. The .md is a copy made from the drawing,
-// so later exports replace it without asking.
+// one, or under a name it asks for. It asks before replacing a file, except
+// the one this session already exported to.
 func (a *app) export() {
 	switch {
 	case a.exported != "":
 		a.writeMD(a.exported)
 	case a.file != "":
-		a.writeMD(withExt(a.file, ".md"))
+		a.unlessExists(withExt(a.file, ".md"), a.writeMD)
 	default:
 		a.askPath("Export as: ", ".md", "", a.writeMD)
 	}

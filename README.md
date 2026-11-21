@@ -137,10 +137,10 @@ objects:
 `mock.md` in the same folder. If the drawing has no name yet, it asks for
 one.
 
-Watch out: ^E overwrites `mock.md` without asking, even the first time. If
-you already have a `mock.md` you care about, rename one of them first. Make
-your changes in the drawing, not in the export. Exporting does not save the
-drawing; press ^S for that.
+If `mock.md` already exists, ^E asks before replacing it. After that, later
+exports in the same session replace it without asking. Make your changes in
+the drawing, not in the export. Exporting does not save the drawing; press
+^S for that.
 
 Opening a `.txt` or `.md` file brings the picture in as one text shape. For
 Markdown, it takes the first code block fenced with backticks, or the whole
