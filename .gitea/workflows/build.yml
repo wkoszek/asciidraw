@@ -1,0 +1,64 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: tig.koszek.com/wkoszek/coreapp-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITEA_TOKEN }}
+    steps:
+      # go test compiles and runs the checked-out code, so on a pull_request this
+      # job executes untrusted contributor code. Key the Go caches by trust tier
+      # so a poisoned PR build writes into a separate tree and can never be picked
+      # up by a later trusted build on main.
+      - name: Set cache paths
+        env:
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          case "$EVENT" in
+            pull_request) TIER=untrusted ;;
+            *)            TIER=trusted ;;
+          esac
+          {
+            echo "GOMODCACHE=/cache/$REPO/$TIER/gomodcache"
+            echo "GOCACHE=/cache/$REPO/$TIER/gocache"
+            echo "GOLANGCI_LINT_CACHE=/cache/$REPO/$TIER/golangci"
+          } >> "$GITHUB_ENV"
+
+      - name: Clone repo
+        env:
+          REF: ${{ github.head_ref || github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p "$GOMODCACHE" "$GOCACHE" "$GOLANGCI_LINT_CACHE"
+          git clone --depth 1 -b "$REF" \
+            "http://$ACTOR:$TOKEN@gitea:3000/$REPO.git" .
+          # Drop the embedded credential so it is not left in .git/config, where
+          # the untrusted code this job then builds and runs could read it.
+          git remote set-url origin "http://gitea:3000/$REPO.git"
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "not gofmt'd:"; echo "$unformatted"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
