@@ -72,6 +72,7 @@ type app struct {
 	mx, my    int      // last mouse position, for the readout
 	swallow   bool     // ignore mouse events until the button is released
 	shift     bool     // Shift held during the last mouse event
+	snap      int      // shape a dragged line end would attach to, or -1
 	clip      []object // what ^C copied, moved to 0,0
 	clipText  string   // its picture, as put on the system clipboard
 	showPanel bool
@@ -81,7 +82,7 @@ type app struct {
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, showPanel: true}
+	return &app{s: s, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, showPanel: true}
 }
 
 func (a *app) reset() {
@@ -115,6 +116,7 @@ func (a *app) pushUndo(state []object) {
 
 // commit records an undo step if the objects changed since before.
 func (a *app) commit(before []object) bool {
+	a.reattach(nil) // attached line ends follow whatever just changed
 	if reflect.DeepEqual(before, a.objs) {
 		return false
 	}
@@ -652,6 +654,13 @@ func (a *app) dragTo(x, y int) {
 			o.move(dx, dy)
 			a.objs[j] = o
 		}
+		// Lines being carried keep their shape; lines left behind follow
+		// the shapes they are attached to.
+		skip := map[int]bool{}
+		for j := range d.origs {
+			skip[j] = true
+		}
+		a.reattach(skip)
 	case dResize:
 		o := d.orig.clone()
 		if a.shift && o.squarable() {
@@ -676,6 +685,21 @@ func (a *app) dragTo(x, y int) {
 		}
 		o.normalize() // widgets keep their shape while you drag
 		a.objs[d.obj] = o
+		a.snap = -1
+		if isLine(o.Kind) { // the end being dragged attaches as it goes
+			a.detect(d.obj)
+			ex, ey := a.objs[d.obj].X0, a.objs[d.obj].Y0
+			if d.h.x1 {
+				ex, ey = a.objs[d.obj].X1, a.objs[d.obj].Y1
+			}
+			a.snap, _, _ = anchorAt(a.objs, d.obj, ex, ey)
+		}
+		a.reattach(map[int]bool{d.obj: true})
+	case dCreate:
+		a.snap = -1
+		if isLine(tools[a.tool].kind) {
+			a.snap, _, _ = anchorAt(a.objs, -1, x, y)
+		}
 	}
 }
 
@@ -684,6 +708,11 @@ func (a *app) newShape(d *drag) object {
 	o := object{Kind: tools[a.tool].kind, X0: d.x0, Y0: d.y0, X1: d.x1, Y1: d.y1, Style: a.style}
 	if a.shift && o.squarable() {
 		o.X1, o.Y1 = symmetric(d.x0, d.y0, d.x1, d.y1)
+	}
+	if isLine(o.Kind) {
+		a.ensureIDs()
+		_, o.From, _ = anchorAt(a.objs, -1, o.X0, o.Y0)
+		_, o.To, _ = anchorAt(a.objs, -1, o.X1, o.Y1)
 	}
 	if def, ok := widgets[o.Kind]; ok {
 		o.Text, o.Value = append([]string(nil), def.label...), def.value
@@ -699,10 +728,17 @@ func (a *app) widgetTool() bool { return isWidget(tools[a.tool].kind) }
 
 func (a *app) release() {
 	d := a.drag
-	a.drag, a.pressed = nil, -1
+	a.drag, a.pressed, a.snap = nil, -1, -1
 	switch d.mode {
 	case dMove, dResize:
 		a.objs[d.obj].normalize()
+		// A line that was moved on its own may now touch other shapes, or
+		// none. One carried along with its shapes stays attached.
+		for j := range d.origs {
+			if isLine(a.objs[j].Kind) {
+				a.detect(j)
+			}
+		}
 		if a.commit(d.before) || !d.wasSel {
 			return
 		}
@@ -803,7 +839,7 @@ func (a *app) objStyle(i int, doomed map[int]bool) tcell.Style {
 		st = st.Foreground(colPressed).Bold(true)
 	case a.isSel(i):
 		st = st.Foreground(colSel).Bold(true)
-	case a.hovered(i):
+	case a.hovered(i) || i == a.snap:
 		st = st.Foreground(colHover)
 	}
 	return st

@@ -81,10 +81,30 @@ func (a *app) paste() {
 	x, y := a.mx, a.my
 	// Pasted groups stay groups, but new ones, apart from the originals.
 	newGroup, next := map[int]int{}, a.nextGroup()
+	// Pasted shapes get new IDs. A pasted line stays attached to a shape
+	// pasted with it, and lets go of anything else.
+	a.ensureIDs()
+	newID, nextID := map[int]int{}, 1
+	for _, o := range a.objs {
+		nextID = max(nextID, o.ID+1)
+	}
+	for _, o := range a.clip {
+		if o.ID != 0 {
+			newID[o.ID], nextID = nextID, nextID+1
+		}
+	}
 	var added []int
 	for _, o := range a.clip {
 		o = o.clone()
 		o.move(x, y)
+		o.ID = newID[o.ID]
+		o.From.ID, o.To.ID = newID[o.From.ID], newID[o.To.ID]
+		if o.From.ID == 0 {
+			o.From = anchor{}
+		}
+		if o.To.ID == 0 {
+			o.To = anchor{}
+		}
 		if o.Group != 0 {
 			if newGroup[o.Group] == 0 {
 				newGroup[o.Group], next = next, next+1

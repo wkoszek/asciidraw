@@ -151,40 +151,7 @@ func drawBox(c *canvas, x0, y0, x1, y1 int, st boxStyle) {
 // drawLine runs across row y0, then down or up column x1, with a corner
 // where the two meet. arrow puts a head on the end.
 func drawLine(c *canvas, x0, y0, x1, y1 int, st boxStyle, arrow bool) {
-	step := func(a, b int) int {
-		if b < a {
-			return -1
-		}
-		return 1
-	}
-	for x := x0; x != x1+step(x0, x1); x += step(x0, x1) {
-		c.set(x, y0, st.h)
-	}
-	for y := y0; y != y1+step(y0, y1); y += step(y0, y1) {
-		c.set(x1, y, st.v)
-	}
-	if x0 != x1 && y0 != y1 {
-		right, down := x1 > x0, y1 > y0
-		corner := map[[2]bool]rune{
-			{true, true}: st.tr, {true, false}: st.br,
-			{false, true}: st.tl, {false, false}: st.bl,
-		}[[2]bool{right, down}]
-		c.set(x1, y0, corner)
-	} else if y0 == y1 {
-		c.set(x1, y0, st.h) // the vertical pass overwrote the end cell
-	}
-	if arrow {
-		head := '>'
-		switch {
-		case y1 > y0:
-			head = 'v'
-		case y1 < y0:
-			head = '^'
-		case x1 < x0:
-			head = '<'
-		}
-		c.set(x1, y1, head)
-	}
+	drawPath(c, [][2]int{{x0, y0}, {x1, y0}, {x1, y1}}, st, arrow)
 }
 
 // drawOval draws the oval that fits the rectangle. The outline is one cell

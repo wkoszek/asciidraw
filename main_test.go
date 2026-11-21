@@ -1023,3 +1023,123 @@ func TestHoverLightsGroup(t *testing.T) {
 		t.Fatal("the box outside the group should not light")
 	}
 }
+
+// joined draws box A (0,0)-(10,4), box B (30,0)-(40,4) and an arrow from
+// just right of A to just left of B.
+func joined(t *testing.T) *app {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)
+	drag2(a, 30, 0, 40, 4)
+	a.tool = toolArrow
+	drag2(a, 11, 2, 29, 2)
+	a.tool = toolBox
+	ctrl(a, tcell.KeyEscape)
+	return a
+}
+
+func TestArrowAttaches(t *testing.T) {
+	a := joined(t)
+	ar := a.objs[2]
+	if ar.From.ID != a.objs[0].ID || ar.From.Side != 'r' || ar.To.ID != a.objs[1].ID || ar.To.Side != 'l' {
+		t.Fatalf("anchors: %+v", ar)
+	}
+	// Move B down 4: the arrow's head follows, and bends halfway.
+	drag2(a, 35, 0, 35, 4)
+	if o := a.objs[2]; o.X1 != 29 || o.Y1 != 6 || o.X0 != 11 || o.Y0 != 2 {
+		t.Fatalf("after move: %+v", o)
+	}
+	if got := a.objs[2].route(); !reflect.DeepEqual(got, [][2]int{{11, 2}, {20, 2}, {20, 6}, {29, 6}}) {
+		t.Fatalf("route: %v", got)
+	}
+	// One undo puts both back.
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[1].Y0 != 0 || a.objs[2].Y1 != 2 {
+		t.Fatalf("undo: %+v %+v", a.objs[1], a.objs[2])
+	}
+	// Nudging A moves the arrow's tail too.
+	click(a, 5, 0)
+	ctrl(a, tcell.KeyDown)
+	if a.objs[2].Y0 != 3 {
+		t.Fatalf("nudge: %+v", a.objs[2])
+	}
+}
+
+func TestArrowAttachResizeAndDelete(t *testing.T) {
+	a := joined(t)
+	// Shrink B from the top to rows 3-4. The anchor sat 2 rows down its
+	// left side, which no longer fits, so the end moves to the lowest row
+	// still on the side.
+	click(a, 35, 0)
+	drag2(a, 30, 0, 30, 3)
+	if o := a.objs[2]; o.X1 != 29 || o.Y1 != 4 {
+		t.Fatalf("after resize: %+v", o)
+	}
+	// Delete A: the arrow stays and lets go of A.
+	click(a, 5, 0)
+	typeStr(a, "x")
+	ar := a.objs[1]
+	if len(a.objs) != 2 || ar.Kind != "arrow" || ar.From.ID != 0 || ar.To.ID == 0 || ar.X0 != 11 {
+		t.Fatalf("after delete: %+v", a.objs)
+	}
+}
+
+func TestArrowLetsGoWhenMovedAlone(t *testing.T) {
+	a := joined(t)
+	drag2(a, 20, 2, 20, 10) // grab the arrow's middle and move it down
+	if o := a.objs[2]; o.From.ID != 0 || o.To.ID != 0 || o.Y0 != 10 {
+		t.Fatalf("moved alone should let go: %+v", o)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	// Moved with both its boxes, it stays attached.
+	ctrl(a, tcell.KeyCtrlA)
+	drag2(a, 5, 0, 5, 6)
+	if o := a.objs[2]; o.From.ID == 0 || o.To.ID == 0 || o.Y0 != 8 {
+		t.Fatalf("moved together should stay attached: %+v", o)
+	}
+}
+
+func TestDragLineEndToAttach(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 30, 0, 40, 4)
+	a.tool = toolLine
+	drag2(a, 0, 10, 10, 10) // a loose line
+	if a.objs[1].To.ID != 0 {
+		t.Fatal("a line away from shapes is not attached")
+	}
+	// Drag its end to just under the box: the box lights up, then it attaches.
+	press(a, 10, 10, tcell.Button1)
+	press(a, 35, 5, tcell.Button1)
+	if a.snap != 0 {
+		t.Fatalf("the box should light up as a target: %d", a.snap)
+	}
+	press(a, 35, 5, tcell.ButtonNone)
+	if o := a.objs[1]; o.To.ID != a.objs[0].ID || o.To.Side != 'b' || a.snap != -1 {
+		t.Fatalf("attach by dragging: %+v snap=%d", o, a.snap)
+	}
+}
+
+func TestAttachmentsSaveAndPaste(t *testing.T) {
+	fakeClipboard(t)
+	a := joined(t)
+	back, err := decodeYAML(must(encodeYAML(a.objs)))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("yaml: %v\n%+v\n%+v", err, back, a.objs)
+	}
+	if !strings.Contains(string(must(encodeYAML(a.objs))), "side: right") {
+		t.Fatal("yaml should name the side")
+	}
+	// Copy B and the arrow: the pasted arrow keeps its end on the pasted B
+	// and lets go of A, which wasn't copied.
+	click(a, 35, 0)
+	shiftClick(a, 20, 2)
+	typeStr(a, "y")
+	press(a, 50, 10, tcell.ButtonNone)
+	typeStr(a, "p")
+	nb, na := a.objs[3], a.objs[4]
+	if nb.Kind != "box" || na.Kind != "arrow" {
+		nb, na = na, nb
+	}
+	if na.From.ID != 0 || na.To.ID != nb.ID || nb.ID == a.objs[1].ID {
+		t.Fatalf("paste: box %+v arrow %+v", nb, na)
+	}
+}

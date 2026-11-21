@@ -35,7 +35,7 @@ under a third heading, "Widgets".
 
 ## 4. Arrows that stay attached
 
-- [ ] An arrow that starts or ends on a box's edge stays attached when the
+- [x] An arrow that starts or ends on a box's edge stays attached when the
       box moves.
 
 ## 5. Labels that belong to boxes

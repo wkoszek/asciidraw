@@ -16,8 +16,11 @@ type object struct {
 	Y1    int
 	Style int // index into styles
 	Text  []string
-	Value int // widget state: checked, active tab, or percent
-	Group int // shapes with the same nonzero Group move and select together
+	Value int    // widget state: checked, active tab, or percent
+	Group int    // shapes with the same nonzero Group move and select together
+	ID    int    // stable name, for lines to attach to; see connect.go
+	From  anchor // what a line's start is attached to
+	To    anchor // what a line's end is attached to
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text"}
@@ -63,10 +66,8 @@ func (o object) draw(c *canvas) {
 		if isWidget(o.Kind) {
 			drawWidget(c, o, st)
 		}
-	case "line":
-		drawLine(c, o.X0, o.Y0, o.X1, o.Y1, st, false)
-	case "arrow":
-		drawLine(c, o.X0, o.Y0, o.X1, o.Y1, st, true)
+	case "line", "arrow":
+		drawPath(c, o.route(), st, o.Kind == "arrow")
 	case "text":
 		// Spaces are see-through, so text can sit on top of other shapes.
 		for i, line := range o.Text {

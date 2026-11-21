@@ -22,15 +22,48 @@ type fileDoc struct {
 // run from x0, y0 to x1, y1. Pointers keep zeros from being dropped while
 // leaving out fields a kind doesn't use.
 type fileObject struct {
-	Kind  string   `yaml:"kind"`
-	Style string   `yaml:"style,omitempty"`
-	X0    *int     `yaml:"x0,omitempty"`
-	Y0    *int     `yaml:"y0,omitempty"`
-	X1    *int     `yaml:"x1,omitempty"`
-	Y1    *int     `yaml:"y1,omitempty"`
-	Text  []string `yaml:"text,omitempty"`
-	Value *int     `yaml:"value,omitempty"`
-	Group int      `yaml:"group,omitempty"`
+	Kind  string      `yaml:"kind"`
+	Style string      `yaml:"style,omitempty"`
+	X0    *int        `yaml:"x0,omitempty"`
+	Y0    *int        `yaml:"y0,omitempty"`
+	X1    *int        `yaml:"x1,omitempty"`
+	Y1    *int        `yaml:"y1,omitempty"`
+	Text  []string    `yaml:"text,omitempty"`
+	Value *int        `yaml:"value,omitempty"`
+	Group int         `yaml:"group,omitempty"`
+	ID    int         `yaml:"id,omitempty"`
+	From  *fileAnchor `yaml:"from,omitempty"`
+	To    *fileAnchor `yaml:"to,omitempty"`
+}
+
+// fileAnchor is an attached line end: the shape's id, the side (left,
+// right, top or bottom), how far along it, and 1 if it sits just outside.
+type fileAnchor struct {
+	ID   int    `yaml:"id"`
+	Side string `yaml:"side"`
+	At   int    `yaml:"at"`
+	Gap  int    `yaml:"gap,omitempty"`
+}
+
+var sideNames = map[byte]string{'l': "left", 'r': "right", 't': "top", 'b': "bottom"}
+
+func toFileAnchor(an anchor) *fileAnchor {
+	if an.ID == 0 {
+		return nil
+	}
+	return &fileAnchor{an.ID, sideNames[an.Side], an.At, an.Gap}
+}
+
+func fromFileAnchor(f *fileAnchor) (anchor, error) {
+	if f == nil {
+		return anchor{}, nil
+	}
+	for b, n := range sideNames {
+		if n == f.Side {
+			return anchor{f.ID, b, f.At, f.Gap}, nil
+		}
+	}
+	return anchor{}, fmt.Errorf("unknown side %q", f.Side)
 }
 
 // hasValue lists the widgets whose state is worth writing down.
@@ -60,7 +93,7 @@ func styleIndex(name string) (int, bool) {
 func encodeYAML(objs []object) ([]byte, error) {
 	doc := fileDoc{Version: 1, Objects: []fileObject{}}
 	for _, o := range objs {
-		f := fileObject{Kind: o.Kind, Group: o.Group}
+		f := fileObject{Kind: o.Kind, Group: o.Group, ID: o.ID, From: toFileAnchor(o.From), To: toFileAnchor(o.To)}
 		if o.Kind == "text" {
 			f.X0, f.Y0, f.Text = ptr(o.X0), ptr(o.Y0), o.Text
 		} else {
@@ -93,7 +126,14 @@ func decodeYAML(data []byte) ([]object, error) {
 	}
 	var objs []object
 	for i, f := range doc.Objects {
-		o := object{Kind: f.Kind, Group: f.Group}
+		o := object{Kind: f.Kind, Group: f.Group, ID: f.ID}
+		var err error
+		if o.From, err = fromFileAnchor(f.From); err == nil {
+			o.To, err = fromFileAnchor(f.To)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("object %d: %w", i+1, err)
+		}
 		switch f.Kind {
 		case "text":
 			o.X0, o.Y0, o.Text = val(f.X0), val(f.Y0), f.Text
