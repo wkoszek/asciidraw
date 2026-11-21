@@ -224,6 +224,7 @@ When you are not typing, these letters work as commands:
 | `x` | delete, and leave the clipboard alone | Del |
 | `g` | group, or ungroup | ^G |
 | `v` | switch to the Select tool; press again to go back | |
+| `t` | change the style of the selected shapes: ascii, line, round, double | |
 
 They come from vim. Press Esc first if you are typing.
 

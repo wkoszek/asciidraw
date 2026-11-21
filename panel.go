@@ -134,7 +134,7 @@ func (a *app) renderPanel() {
 	if h >= 8 {
 		a.text(x0+1, h-5, " ⇧click add g group v select", dim)
 		a.text(x0+1, h-4, " Tab next  x/Del delete", dim)
-		a.text(x0+1, h-3, " y copy  d cut  p paste", dim)
+		a.text(x0+1, h-3, " y copy d cut p paste t style", dim)
 		a.text(x0+1, h-2, " corner: resize  ←→↑↓ nudge", dim)
 	}
 }

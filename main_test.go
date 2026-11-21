@@ -1156,3 +1156,30 @@ func TestNudgeAttachedLine(t *testing.T) {
 		t.Fatalf("nudged away from A, its tail lets go: %+v", o)
 	}
 }
+
+func TestCycleStyle(t *testing.T) {
+	a := threeBoxes(t)
+	typeStr(a, "t")
+	if a.style != 1 || a.objs[0].Style != 0 {
+		t.Fatal("with nothing selected, t changes the style for new shapes")
+	}
+	click(a, 0, 0)
+	shiftClick(a, 10, 0)
+	typeStr(a, "t")
+	if a.objs[0].Style != 1 || a.objs[1].Style != 1 || a.objs[2].Style != 0 {
+		t.Fatalf("t restyles the selection: %+v", a.objs)
+	}
+	for range 3 {
+		typeStr(a, "t")
+	}
+	if a.objs[0].Style != 0 {
+		t.Fatal("after double comes ascii again")
+	}
+	if !strings.HasPrefix(a.ascii(), "+---+") {
+		t.Fatalf("drawn in ascii again: %q", a.ascii())
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[0].Style != 3 {
+		t.Fatal("each t is one undo step")
+	}
+}

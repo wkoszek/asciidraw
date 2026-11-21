@@ -210,6 +210,35 @@ func (a *app) toggleGroup() {
 	a.commit(before)
 }
 
+// cycleStyle moves the selected shapes on to the next style: ascii, line,
+// round, double, then ascii again. They all take the style after the
+// primary shape's, so a mixed selection comes out matching. With nothing
+// selected, it changes the style for new shapes.
+func (a *app) cycleStyle() {
+	var styled []int
+	for _, i := range a.selected() {
+		if a.objs[i].Kind != "text" { // text has no style
+			styled = append(styled, i)
+		}
+	}
+	if len(styled) == 0 {
+		a.style = (a.style + 1) % len(styles)
+		a.say("New shapes: " + styles[a.style].name + " style. Select shapes to restyle them.")
+		return
+	}
+	cur := a.objs[styled[len(styled)-1]].Style
+	if a.sel >= 0 && a.sel < len(a.objs) && a.objs[a.sel].Kind != "text" {
+		cur = a.objs[a.sel].Style
+	}
+	next := (cur + 1) % len(styles)
+	before := cloneObjs(a.objs)
+	for _, i := range styled {
+		a.objs[i].Style = next
+	}
+	a.commit(before)
+	a.say(fmt.Sprintf("%s now %s style. t again for the next one.", a.describe(styled), styles[next].name))
+}
+
 func (a *app) toggleSelectTool() {
 	if a.tool == toolSelect {
 		a.tool = a.lastTool

@@ -431,6 +431,8 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.toggleGroup()
 		case 'v':
 			a.toggleSelectTool()
+		case 't':
+			a.cycleStyle()
 		}
 		return
 	}
