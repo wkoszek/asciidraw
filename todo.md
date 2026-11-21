@@ -17,14 +17,14 @@ Stamp ready-made pieces instead of building them from boxes and text. Each
 is one object you can move, resize and relabel. Put them in the ^T menu
 under a third heading, "Widgets".
 
-- [ ] Button `[ OK ]`
-- [ ] Checkbox `[x]` and radio button `(•)`
-- [ ] Input field `[__________]`
-- [ ] Dropdown `[ Choose  v ]`
-- [ ] Tabs
-- [ ] Scrollbar
-- [ ] Progress bar `[████░░░░]`
-- [ ] Window with a title bar
+- [x] Button `[ OK ]`
+- [x] Checkbox `[x]` and radio button `(•)`
+- [x] Input field `[__________]`
+- [x] Dropdown `[ Choose  v ]`
+- [x] Tabs
+- [x] Scrollbar
+- [x] Progress bar `[████░░░░]`
+- [x] Window with a title bar
 
 ## 3. Select several shapes
 

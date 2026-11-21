@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// object is one shape on the canvas. Boxes, lines and arrows use both
-// points; text sits at (X0, Y0).
+// object is one shape on the canvas. Boxes, ovals, lines, arrows and
+// widgets use both points; text sits at (X0, Y0).
 type object struct {
 	Kind  string // "box", "line", "arrow", "text"
 	X0    int
@@ -16,12 +16,22 @@ type object struct {
 	Y1    int
 	Style int // index into styles
 	Text  []string
+	Value int // widget state: checked, active tab, or percent
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text"}
 
+func init() {
+	for k, d := range widgets {
+		kindNames[k] = d.name
+	}
+}
+
 // boxy kinds are sized by a rectangle and have four corner handles.
-func (o object) boxy() bool { return o.Kind == "box" || o.Kind == "oval" }
+func (o object) boxy() bool { return o.Kind == "box" || o.Kind == "oval" || isWidget(o.Kind) }
+
+// squarable kinds turn square or round with Shift.
+func (o object) squarable() bool { return o.Kind == "box" || o.Kind == "oval" }
 
 func (o object) clone() object {
 	if o.Text != nil {
@@ -48,6 +58,10 @@ func (o object) draw(c *canvas) {
 		drawBox(c, o.X0, o.Y0, o.X1, o.Y1, st)
 	case "oval":
 		drawOval(c, o.X0, o.Y0, o.X1, o.Y1, st)
+	default:
+		if isWidget(o.Kind) {
+			drawWidget(c, o, st)
+		}
 	case "line":
 		drawLine(c, o.X0, o.Y0, o.X1, o.Y1, st, false)
 	case "arrow":
@@ -78,11 +92,15 @@ func (o *object) move(dx, dy int) {
 	o.X0, o.Y0, o.X1, o.Y1 = o.X0+dx, o.Y0+dy, o.X1+dx, o.Y1+dy
 }
 
-// normalize keeps a box's or oval's first point at its top-left.
+// normalize keeps a box's, oval's or widget's first point at its top-left,
+// and a widget to a shape it can have.
 func (o *object) normalize() {
 	if o.boxy() {
 		o.X0, o.X1 = order(o.X0, o.X1)
 		o.Y0, o.Y1 = order(o.Y0, o.Y1)
+	}
+	if isWidget(o.Kind) {
+		o.fixSize()
 	}
 }
 
@@ -105,7 +123,7 @@ type handle struct{ ok, x1, y1 bool }
 // line end.
 func (o object) handleAt(x, y int) handle {
 	switch o.Kind {
-	case "box", "oval":
+	case "box", "oval", "button", "checkbox", "radio", "input", "dropdown", "tabs", "scrollbar", "progress", "window":
 		for _, hx := range []bool{false, true} {
 			for _, hy := range []bool{false, true} {
 				px, py := o.X0, o.Y0
@@ -135,9 +153,11 @@ func (o object) label() string {
 	switch o.Kind {
 	case "box", "oval":
 		x, y, w, h := o.bounds()
-		return fmt.Sprintf("%-5s %d×%d at %d,%d", kindNames[o.Kind], w, h, x, y)
+		return fmt.Sprintf("%-6s %d×%d at %d,%d", kindNames[o.Kind], w, h, x, y)
 	case "line", "arrow":
-		return fmt.Sprintf("%-5s %d,%d→%d,%d", kindNames[o.Kind], o.X0, o.Y0, o.X1, o.Y1)
+		return fmt.Sprintf("%-6s %d,%d→%d,%d", kindNames[o.Kind], o.X0, o.Y0, o.X1, o.Y1)
+	case "progress", "scrollbar":
+		return fmt.Sprintf("%-6s %d%%", kindNames[o.Kind], o.Value)
 	case "text":
 		first := ""
 		if len(o.Text) > 0 {
@@ -146,7 +166,10 @@ func (o object) label() string {
 		if len(o.Text) > 1 {
 			first += "…"
 		}
-		return "Text  \"" + first + "\""
+		return "Text   \"" + first + "\""
+	}
+	if isWidget(o.Kind) {
+		return fmt.Sprintf("%-6s \"%s\"", kindNames[o.Kind], strings.Join(o.Text, ", "))
 	}
 	return o.Kind
 }

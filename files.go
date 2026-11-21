@@ -29,7 +29,11 @@ type fileObject struct {
 	X1    *int     `yaml:"x1,omitempty"`
 	Y1    *int     `yaml:"y1,omitempty"`
 	Text  []string `yaml:"text,omitempty"`
+	Value *int     `yaml:"value,omitempty"`
 }
+
+// hasValue lists the widgets whose state is worth writing down.
+var hasValue = map[string]bool{"checkbox": true, "radio": true, "tabs": true, "progress": true, "scrollbar": true}
 
 func ptr(n int) *int { return &n }
 
@@ -61,6 +65,12 @@ func encodeYAML(objs []object) ([]byte, error) {
 		} else {
 			f.Style = styles[min(max(o.Style, 0), len(styles)-1)].name
 			f.X0, f.Y0, f.X1, f.Y1 = ptr(o.X0), ptr(o.Y0), ptr(o.X1), ptr(o.Y1)
+			if isWidget(o.Kind) {
+				f.Text = o.Text
+			}
+			if hasValue[o.Kind] {
+				f.Value = ptr(o.Value)
+			}
 		}
 		doc.Objects = append(doc.Objects, f)
 	}
@@ -89,16 +99,20 @@ func decodeYAML(data []byte) ([]object, error) {
 			if len(o.Text) == 0 {
 				continue // nothing to show
 			}
-		case "box", "oval", "line", "arrow":
+		default:
+			if f.Kind != "box" && f.Kind != "oval" && f.Kind != "line" && f.Kind != "arrow" && !isWidget(f.Kind) {
+				return nil, fmt.Errorf("object %d: unknown kind %q", i+1, f.Kind)
+			}
 			st, ok := styleIndex(f.Style)
 			if !ok {
 				return nil, fmt.Errorf("object %d: unknown style %q", i+1, f.Style)
 			}
 			o.Style = st
 			o.X0, o.Y0, o.X1, o.Y1 = val(f.X0), val(f.Y0), val(f.X1), val(f.Y1)
+			if isWidget(f.Kind) {
+				o.Text, o.Value = f.Text, val(f.Value)
+			}
 			o.normalize()
-		default:
-			return nil, fmt.Errorf("object %d: unknown kind %q", i+1, f.Kind)
 		}
 		objs = append(objs, o)
 	}

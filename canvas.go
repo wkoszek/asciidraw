@@ -62,13 +62,14 @@ type boxStyle struct {
 	name                 string
 	h, v, tl, tr, bl, br rune
 	up, down             rune // diagonals for ovals: rising and falling
+	lt, rt, bt           rune // tees: left side, right side, bottom
 }
 
 var styles = []boxStyle{
-	{"ascii", '-', '|', '+', '+', '+', '+', '/', '\\'},
-	{"line", '─', '│', '┌', '┐', '└', '┘', '╱', '╲'},
-	{"round", '─', '│', '╭', '╮', '╰', '╯', '╱', '╲'},
-	{"double", '═', '║', '╔', '╗', '╚', '╝', '╱', '╲'},
+	{"ascii", '-', '|', '+', '+', '+', '+', '/', '\\', '+', '+', '+'},
+	{"line", '─', '│', '┌', '┐', '└', '┘', '╱', '╲', '├', '┤', '┴'},
+	{"round", '─', '│', '╭', '╮', '╰', '╯', '╱', '╲', '├', '┤', '┴'},
+	{"double", '═', '║', '╔', '╗', '╚', '╝', '╱', '╲', '╠', '╣', '╩'},
 }
 
 // sample shows a style's pieces: a box top, a box bottom, a side, an arrow.
@@ -87,12 +88,24 @@ const (
 	toolErase
 )
 
-var tools = []struct{ name, help string }{
-	{"Box", "drag a box, Shift: square"},
-	{"Oval", "drag an oval, Shift: circle"},
-	{"Line", "drag a line, bends once"},
-	{"Arrow", "line with a head"},
-	{"Erase", "drag to delete objects"},
+// shapeTools is how many of the tools are shapes; the rest are widgets.
+const shapeTools = toolErase + 1
+
+var tools = []struct{ name, kind, help string }{
+	{"Box", "box", "drag a box, Shift: square"},
+	{"Oval", "oval", "drag an oval, Shift: circle"},
+	{"Line", "line", "drag a line, bends once"},
+	{"Arrow", "arrow", "line with a head"},
+	{"Erase", "", "drag to delete objects"},
+	{"Button", "button", "[ OK ]"},
+	{"Check", "checkbox", "[x] Remember me"},
+	{"Radio", "radio", "(•) Option"},
+	{"Input", "input", "[user______]"},
+	{"Drop", "dropdown", "[ Choose  ▼ ]"},
+	{"Tabs", "tabs", "│ Home │ Settings"},
+	{"Scroll", "scrollbar", "▲ ░█░░ ▼"},
+	{"Prog", "progress", "[████░░░░] 40%"},
+	{"Window", "window", "title bar and body"},
 }
 
 func order(a, b int) (int, int) {

@@ -344,14 +344,9 @@ func TestMenuClickDoesNotDraw(t *testing.T) {
 	if a.menu != nil || len(a.objs) != 0 {
 		t.Fatalf("menu=%v objs=%+v", a.menu, a.objs)
 	}
-	lines := a.menuLines()
 	ctrl(a, tcell.KeyCtrlT)
-	x0, y0, _, _ := a.menuBox(lines)
-	for i, l := range lines {
-		if l.item == toolLine {
-			click(a, x0+3, y0+1+i)
-		}
-	}
+	mx, my := a.menuItemPos(itemOfTool(toolLine))
+	click(a, mx, my)
 	if a.tool != toolLine {
 		t.Fatalf("click should pick Line, got %d", a.tool)
 	}
@@ -668,4 +663,168 @@ func TestExportAsksBeforeOverwrite(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "other.md")); err != nil {
 		t.Fatalf("export should follow the new name: %v", err)
 	}
+}
+
+func useTool(a *app, kind string) {
+	for i, t := range tools {
+		if t.kind == kind {
+			a.tool = i
+			return
+		}
+	}
+	panic("no tool " + kind)
+}
+
+func TestWidgetsStampAndDraw(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	useTool(a, "button")
+	click(a, 0, 0)
+	useTool(a, "checkbox")
+	click(a, 10, 0)
+	useTool(a, "input")
+	drag2(a, 0, 2, 11, 5) // only the width counts for an input
+	useTool(a, "progress")
+	click(a, 0, 4)
+	if got, want := a.ascii(), "[ OK ]    [x] Remember me\n\n[__________]\n\n[#####........]  40%\n"; got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+	if a.typing {
+		t.Fatal("a click with a widget tool stamps a widget, it doesn't start typing")
+	}
+}
+
+func TestTabsLine(t *testing.T) {
+	c := &canvas{}
+	o := object{Kind: "tabs", Text: []string{"A", "BB", "C"}, Value: 1}
+	o.normalize()
+	drawWidget(c, o, styles[1])
+	if got, want := c.String(), "│ A │ BB │ C │\n└───┘    └───┘\n"; got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+	o.Value = 0
+	c = &canvas{}
+	drawWidget(c, o, styles[1])
+	if got, want := c.String(), "│ A │ BB │ C │\n│   └────┴───┘\n"; got != want {
+		t.Fatalf("active first:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestWidgetEditAndToggle(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	useTool(a, "button")
+	click(a, 0, 0)
+	ctrl(a, tcell.KeyEnter) // selected after stamping: edit its label
+	if a.prompt == nil || string(a.prompt.buf) != "OK" {
+		t.Fatalf("expected a label prompt with OK: %+v", a.prompt)
+	}
+	for range 2 {
+		ctrl(a, tcell.KeyBackspace2)
+	}
+	typeStr(a, "Sign in")
+	ctrl(a, tcell.KeyEnter)
+	if got := a.ascii(); got != "[ Sign in ]\n" {
+		t.Fatalf("relabel should widen the button: %q", got)
+	}
+
+	useTool(a, "checkbox")
+	click(a, 0, 2)
+	typeStr(a, " ")
+	if a.objs[1].Value != 0 {
+		t.Fatal("Space should uncheck")
+	}
+
+	useTool(a, "tabs")
+	click(a, 0, 4)
+	typeStr(a, " ")
+	if a.objs[2].Value != 1 {
+		t.Fatal("Space should move to the next tab")
+	}
+	ctrl(a, tcell.KeyEnter)
+	for range len(a.prompt.buf) {
+		ctrl(a, tcell.KeyBackspace2)
+	}
+	typeStr(a, "One, Two")
+	ctrl(a, tcell.KeyEnter)
+	if o := a.objs[2]; !reflect.DeepEqual(o.Text, []string{"One", "Two"}) || o.Value != 1 {
+		t.Fatalf("tabs: %+v", o)
+	}
+
+	useTool(a, "progress")
+	click(a, 0, 7)
+	ctrl(a, tcell.KeyEnter)
+	for range len(a.prompt.buf) {
+		ctrl(a, tcell.KeyBackspace2)
+	}
+	typeStr(a, "lots")
+	ctrl(a, tcell.KeyEnter)
+	if !a.msgErr || a.objs[3].Value != 40 {
+		t.Fatal("a bad percent should be refused")
+	}
+	ctrl(a, tcell.KeyEnter)
+	ctrl(a, tcell.KeyBackspace2)
+	ctrl(a, tcell.KeyBackspace2)
+	typeStr(a, "250%")
+	ctrl(a, tcell.KeyEnter)
+	if a.objs[3].Value != 100 {
+		t.Fatalf("percent should clamp to 100: %d", a.objs[3].Value)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[3].Value != 40 {
+		t.Fatal("undo should restore the percent")
+	}
+}
+
+func TestWidgetShapesAndFiles(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	// A checkbox keeps its size however you drag it.
+	useTool(a, "checkbox")
+	drag2(a, 0, 0, 40, 6)
+	if o := a.objs[0]; o.Y1 != 0 || o.X1 != 3+runeLen("Remember me") {
+		t.Fatalf("checkbox: %+v", o)
+	}
+	// A scrollbar dragged wide turns horizontal.
+	useTool(a, "scrollbar")
+	drag2(a, 0, 2, 20, 3)
+	if o := a.objs[1]; o.Y0 != o.Y1 || o.X1 != 20 {
+		t.Fatalf("scrollbar: %+v", o)
+	}
+	// A window's body is see-through: a click inside it starts typing.
+	useTool(a, "window")
+	click(a, 0, 5)
+	a.tool = toolBox
+	click(a, 5, 9)
+	if !a.typing {
+		t.Fatal("clicking inside a window should type, not select it")
+	}
+	ctrl(a, tcell.KeyEscape)
+	for _, k := range []string{"button", "radio", "input", "dropdown", "tabs", "progress"} {
+		useTool(a, k)
+		click(a, 40, 2*len(a.objs))
+	}
+	back, err := decodeYAML(must(encodeYAML(a.objs)))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("yaml round trip: %v\n%+v\n%+v", err, back, a.objs)
+	}
+	if !strings.Contains(string(must(encodeYAML(a.objs))), "kind: checkbox") {
+		t.Fatal("yaml should name the widget kind")
+	}
+}
+
+func TestMenuWidgetsColumn(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	ctrl(a, tcell.KeyCtrlT)
+	ctrl(a, tcell.KeyRight)
+	if a.previewTool() != shapeTools {
+		t.Fatalf("Right should jump to the first widget: %d", a.previewTool())
+	}
+	ctrl(a, tcell.KeyLeft)
+	if a.previewTool() != 0 {
+		t.Fatal("Left should jump back to the first tool")
+	}
+	x, y := a.menuItemPos(itemOfTool(shapeTools + 2))
+	click(a, x, y)
+	if tools[a.tool].kind != "radio" {
+		t.Fatalf("clicking the Radio row should pick it: %q", tools[a.tool].kind)
+	}
+	a.render()
 }

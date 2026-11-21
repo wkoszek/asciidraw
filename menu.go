@@ -6,84 +6,179 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-// The ^T menu: one list holding the tools and then the styles. The cursor
-// moves through both. The status bar previews whatever the cursor is on.
+// The ^T menu has two columns: shape tools and styles on the left, widgets
+// on the right. The cursor walks one list holding all of them, in that
+// order. The status bar previews whatever the cursor is on.
 
-type menu struct{ cur int } // index into the combined item list
+type menu struct{ cur int } // index into menuItems()
 
-func itemCount() int { return len(tools) + len(styles) }
+type menuItem struct {
+	style bool // a style, not a tool
+	idx   int  // into styles or tools
+}
+
+func menuItems() []menuItem {
+	var items []menuItem
+	for i := 0; i < shapeTools; i++ {
+		items = append(items, menuItem{false, i})
+	}
+	for i := range styles {
+		items = append(items, menuItem{true, i})
+	}
+	for i := shapeTools; i < len(tools); i++ {
+		items = append(items, menuItem{false, i})
+	}
+	return items
+}
+
+func itemOfTool(t int) int  { return indexOf(menuItem{false, t}) }
+func itemOfStyle(s int) int { return indexOf(menuItem{true, s}) }
+
+func indexOf(it menuItem) int {
+	for i, m := range menuItems() {
+		if m == it {
+			return i
+		}
+	}
+	return 0
+}
 
 type menuLine struct {
 	text string
 	item int // -1 for headers and blank lines
 }
 
-func (a *app) menuLines() []menuLine {
+func (a *app) menuColumns() (left, right []menuLine) {
 	mark := func(on bool) string {
 		if on {
 			return "●"
 		}
 		return " "
 	}
-	lines := []menuLine{{" Tool", -1}}
-	for i, t := range tools {
-		lines = append(lines, menuLine{fmt.Sprintf(" %s %-6s %s", mark(i == a.tool), t.name, t.help), i})
+	tool := func(i int) menuLine {
+		return menuLine{fmt.Sprintf(" %s %-6s %s", mark(i == a.tool), tools[i].name, tools[i].help), itemOfTool(i)}
 	}
-	lines = append(lines, menuLine{"", -1}, menuLine{" Style", -1})
+	left = []menuLine{{" Tool", -1}}
+	for i := 0; i < shapeTools; i++ {
+		left = append(left, tool(i))
+	}
+	left = append(left, menuLine{"", -1}, menuLine{" Style", -1})
 	for i, st := range styles {
-		lines = append(lines, menuLine{fmt.Sprintf(" %s %-6s %s", mark(i == a.style), st.name, st.sample()), len(tools) + i})
+		left = append(left, menuLine{fmt.Sprintf(" %s %-6s %s", mark(i == a.style), st.name, st.sample()), itemOfStyle(i)})
 	}
-	return append(lines, menuLine{"", -1},
-		menuLine{" ↑↓ move  Space pick  Enter pick+close  Esc close", -1})
+	right = []menuLine{{" Widgets", -1}}
+	for i := shapeTools; i < len(tools); i++ {
+		right = append(right, tool(i))
+	}
+	return left, right
 }
 
-// menuBox gives the top-left corner and size of the menu, border included.
-func (a *app) menuBox(lines []menuLine) (x0, y0, w, h int) {
+const menuFooter = " ↑↓ move  ←→ column  Space pick  Enter pick+close  Esc close"
+
+func colWidth(lines []menuLine) int {
+	w := 0
 	for _, l := range lines {
-		w = max(w, len([]rune(l.text)))
+		w = max(w, runeLen(l.text))
 	}
-	w, h = w+3, len(lines)+2
+	return w
+}
+
+// menuBox gives the menu's top-left corner and size, border included, and
+// the x where the right column starts.
+func (a *app) menuBox() (x0, y0, w, h, rightX int) {
+	left, right := a.menuColumns()
+	lw := colWidth(left)
+	inner := max(lw+2+colWidth(right), runeLen(menuFooter))
+	w, h = inner+3, max(len(left), len(right))+4
 	sw, sh := a.s.Size()
-	return max((sw-w)/2, 0), max((sh-2-h)/2, 0), w, h
+	x0, y0 = max((sw-w)/2, 0), max((sh-2-h)/2, 0)
+	return x0, y0, w, h, x0 + 1 + lw + 2
+}
+
+// menuItemAt gives the item at screen position (x, y), or -1.
+func (a *app) menuItemAt(x, y int) int {
+	x0, y0, w, _, rightX := a.menuBox()
+	left, right := a.menuColumns()
+	col := left
+	if x >= rightX {
+		col = right
+	}
+	row := y - y0 - 1
+	if x <= x0 || x >= x0+w-1 || row < 0 || row >= len(col) {
+		return -1
+	}
+	return col[row].item
+}
+
+// menuItemPos gives the screen position of an item's row.
+func (a *app) menuItemPos(item int) (int, int) {
+	x0, y0, _, _, rightX := a.menuBox()
+	left, right := a.menuColumns()
+	for i, l := range left {
+		if l.item == item {
+			return x0 + 2, y0 + 1 + i
+		}
+	}
+	for i, l := range right {
+		if l.item == item {
+			return rightX + 1, y0 + 1 + i
+		}
+	}
+	return x0, y0
 }
 
 func (a *app) openMenu() {
-	a.menu = &menu{cur: a.tool}
+	a.menu = &menu{cur: itemOfTool(a.tool)}
 	a.drag, a.pressed = nil, -1
 }
 
 // previewTool and previewStyle are what the status bar shows: the item under
 // the menu cursor while the menu is open, the picked ones otherwise.
 func (a *app) previewTool() int {
-	if a.menu != nil && a.menu.cur < len(tools) {
-		return a.menu.cur
+	if a.menu != nil {
+		if it := menuItems()[a.menu.cur]; !it.style {
+			return it.idx
+		}
 	}
 	return a.tool
 }
 
 func (a *app) previewStyle() int {
-	if a.menu != nil && a.menu.cur >= len(tools) {
-		return a.menu.cur - len(tools)
+	if a.menu != nil {
+		if it := menuItems()[a.menu.cur]; it.style {
+			return it.idx
+		}
 	}
 	return a.style
 }
 
 func (a *app) pick(item int) {
-	if item < len(tools) {
-		a.tool = item
+	it := menuItems()[item]
+	if it.style {
+		a.style = it.idx
 	} else {
-		a.style = item - len(tools)
+		a.tool = it.idx
 	}
 	a.say(fmt.Sprintf("Tool: %s, style: %s", tools[a.tool].name, styles[a.style].name))
 }
 
 func (a *app) menuKey(ev *tcell.EventKey) {
 	m := a.menu
+	n := len(menuItems())
+	inWidgets := func() bool { it := menuItems()[m.cur]; return !it.style && it.idx >= shapeTools }
 	switch ev.Key() {
 	case tcell.KeyUp:
-		m.cur = (m.cur + itemCount() - 1) % itemCount()
+		m.cur = (m.cur + n - 1) % n
 	case tcell.KeyDown, tcell.KeyTab:
-		m.cur = (m.cur + 1) % itemCount()
+		m.cur = (m.cur + 1) % n
+	case tcell.KeyRight:
+		if !inWidgets() {
+			m.cur = itemOfTool(shapeTools)
+		}
+	case tcell.KeyLeft:
+		if inWidgets() {
+			m.cur = itemOfTool(0)
+		}
 	case tcell.KeyEnter:
 		a.pick(m.cur)
 		a.menu = nil
@@ -94,9 +189,9 @@ func (a *app) menuKey(ev *tcell.EventKey) {
 		case ' ':
 			a.pick(m.cur)
 		case 'k':
-			m.cur = (m.cur + itemCount() - 1) % itemCount()
+			m.cur = (m.cur + n - 1) % n
 		case 'j':
-			m.cur = (m.cur + 1) % itemCount()
+			m.cur = (m.cur + 1) % n
 		case 'q':
 			a.menu = nil
 		}
@@ -105,13 +200,9 @@ func (a *app) menuKey(ev *tcell.EventKey) {
 
 // menuMouse: hovering moves the cursor, clicking picks, clicking outside closes.
 func (a *app) menuMouse(x, y int, b tcell.ButtonMask) {
-	lines := a.menuLines()
-	x0, y0, w, h := a.menuBox(lines)
+	x0, y0, w, h, _ := a.menuBox()
 	inside := x > x0 && x < x0+w-1 && y > y0 && y < y0+h-1
-	item := -1
-	if inside {
-		item = lines[y-y0-1].item
-	}
+	item := a.menuItemAt(x, y)
 	if item >= 0 {
 		a.menu.cur = item
 	}
@@ -126,9 +217,8 @@ func (a *app) menuMouse(x, y int, b tcell.ButtonMask) {
 }
 
 func (a *app) renderMenu() {
-	lines := a.menuLines()
-	x0, y0, w, h := a.menuBox(lines)
-	st := styles[2] // round border for the menu itself
+	x0, y0, w, h, rightX := a.menuBox()
+	left, right := a.menuColumns()
 	frame := tcell.StyleDefault.Foreground(tcell.ColorAqua)
 	body := tcell.StyleDefault
 	for y := y0; y < y0+h; y++ {
@@ -137,7 +227,7 @@ func (a *app) renderMenu() {
 		}
 	}
 	c := &canvas{}
-	drawBox(c, x0, y0, x0+w-1, y0+h-1, st)
+	drawBox(c, x0, y0, x0+w-1, y0+h-1, styles[2]) // round border for the menu itself
 	for y := y0; y < y0+h; y++ {
 		for x := x0; x < x0+w; x++ {
 			if r := c.get(x, y); r != ' ' {
@@ -146,20 +236,23 @@ func (a *app) renderMenu() {
 		}
 	}
 	a.text(x0+2, y0, " ^T Tools ", frame.Bold(true))
-	for i, l := range lines {
-		y := y0 + 1 + i
-		ls := body
-		switch {
-		case l.item == a.menu.cur:
-			ls = body.Reverse(true)
-			for x := x0 + 1; x < x0+w-1; x++ {
-				a.s.SetContent(x, y, ' ', nil, ls)
+	column := func(lines []menuLine, x, end int) {
+		for i, l := range lines {
+			y := y0 + 1 + i
+			ls := body
+			switch {
+			case l.item >= 0 && l.item == a.menu.cur:
+				ls = body.Reverse(true)
+				for xx := x; xx < end; xx++ {
+					a.s.SetContent(xx, y, ' ', nil, ls)
+				}
+			case l.item < 0 && l.text != "":
+				ls = body.Bold(true).Foreground(tcell.ColorAqua)
 			}
-		case l.item < 0 && l.text != "" && i < len(lines)-1:
-			ls = body.Bold(true).Foreground(tcell.ColorAqua)
-		case i == len(lines)-1:
-			ls = body.Dim(true)
+			a.text(x, y, l.text, ls)
 		}
-		a.text(x0+1, y, l.text, ls)
 	}
+	column(left, x0+1, rightX-1)
+	column(right, rightX, x0+w-1)
+	a.text(x0+1, y0+h-2, menuFooter, body.Dim(true))
 }

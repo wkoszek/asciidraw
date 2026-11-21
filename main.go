@@ -411,6 +411,8 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.copySel(true)
 		case 'x':
 			a.deleteSel()
+		case ' ':
+			a.toggleWidget()
 		}
 		return
 	}
@@ -429,8 +431,11 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 	case tcell.KeyDown:
 		a.nudge(0, 1)
 	case tcell.KeyEnter:
-		if a.objs[a.sel].Kind == "text" {
+		switch k := a.objs[a.sel].Kind; {
+		case k == "text":
 			a.startEditing(a.sel)
+		case isWidget(k):
+			a.editWidget()
 		}
 	}
 }
@@ -580,7 +585,7 @@ func (a *app) dragTo(x, y int) {
 		a.objs[d.obj] = o
 	case dResize:
 		o := d.orig.clone()
-		if a.shift && o.boxy() {
+		if a.shift && o.squarable() {
 			ax, ay := o.X1, o.Y1 // the corner that stays put
 			if d.h.x1 {
 				ax = o.X0
@@ -600,19 +605,28 @@ func (a *app) dragTo(x, y int) {
 		} else {
 			o.Y0 = y
 		}
+		o.normalize() // widgets keep their shape while you drag
 		a.objs[d.obj] = o
 	}
 }
 
+// newShape makes the object a drag (or, for a widget, a click) creates.
 func (a *app) newShape(d *drag) object {
-	kind := map[int]string{toolBox: "box", toolOval: "oval", toolLine: "line", toolArrow: "arrow"}[a.tool]
-	o := object{Kind: kind, X0: d.x0, Y0: d.y0, X1: d.x1, Y1: d.y1, Style: a.style}
-	if a.shift && o.boxy() {
+	o := object{Kind: tools[a.tool].kind, X0: d.x0, Y0: d.y0, X1: d.x1, Y1: d.y1, Style: a.style}
+	if a.shift && o.squarable() {
 		o.X1, o.Y1 = symmetric(d.x0, d.y0, d.x1, d.y1)
+	}
+	if def, ok := widgets[o.Kind]; ok {
+		o.Text, o.Value = append([]string(nil), def.label...), def.value
+		if !d.moved() && def.w > 0 { // stamped with a click: default size
+			o.X1, o.Y1 = o.X0+def.w-1, o.Y0+def.h-1
+		}
 	}
 	o.normalize()
 	return o
 }
+
+func (a *app) widgetTool() bool { return isWidget(tools[a.tool].kind) }
 
 func (a *app) release() {
 	d := a.drag
@@ -625,7 +639,7 @@ func (a *app) release() {
 			a.startEditing(d.obj)
 		}
 	case dCreate:
-		if !d.moved() {
+		if !d.moved() && !a.widgetTool() {
 			// A click on empty space puts out the text cursor.
 			a.typing, a.edit, a.typed = true, -1, false
 			a.cx, a.cy = d.x0, d.y0
@@ -686,7 +700,7 @@ func (a *app) readout() string {
 
 // shiftMark notes in the readout that Shift is keeping a shape symmetric.
 func (a *app) shiftMark(o object) string {
-	if a.shift && o.boxy() && a.drag != nil && a.drag.mode != dMove {
+	if a.shift && o.squarable() && a.drag != nil && a.drag.mode != dMove {
 		return " ⇧"
 	}
 	return ""
@@ -717,7 +731,7 @@ func (a *app) render() {
 
 	objs := a.objs
 	d := a.drag
-	if d != nil && d.mode == dCreate && d.moved() {
+	if d != nil && d.mode == dCreate && (d.moved() || a.widgetTool()) {
 		objs = append(cloneObjs(a.objs), a.newShape(d))
 	}
 	scene := compose(objs)
