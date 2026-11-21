@@ -1722,3 +1722,14 @@ func TestPickerMouseAndMany(t *testing.T) {
 		t.Fatal("C with nothing selected should explain")
 	}
 }
+
+func TestOvalBackgroundStaysInside(t *testing.T) {
+	o := object{Kind: "oval", X0: 0, Y0: 0, X1: 20, Y1: 6, BG: "blue"}
+	c := compose([]object{o})
+	if c.bgAt(10, 3) != "blue" {
+		t.Fatal("the middle of the oval should be blue")
+	}
+	if c.bgAt(1, 1) != "" || c.bgAt(19, 5) != "" {
+		t.Fatal("the corners outside the curve should not be painted")
+	}
+}

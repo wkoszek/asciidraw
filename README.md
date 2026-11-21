@@ -260,6 +260,41 @@ then back to `░`. These are standard characters, so no special font is
 needed. A fill never blocks clicks meant for a box on top of it: a click
 inside the box still types the box's label.
 
+### Colors
+
+Select one or more shapes and press **C** (Shift-c). A small panel opens
+with two rows of colors: **Text** for a shape's lines and letters, and
+**Back** for its background. Each shape takes on a color as you move to it.
+
+- The left and right arrow keys move between colors, and the up and down
+  arrow keys switch between the two rows. You can also click a color.
+- Enter keeps the colors. Esc puts the old ones back. A click outside the
+  color panel also keeps them.
+- Every selected shape gets the colors, including every shape in a
+  selected group. Changing only the Text row leaves each shape's
+  background as it was, and the other way around.
+
+There are ten choices. The first, shown as `··`, is the default: your
+terminal's normal text and background. Pick it to take a color off. The
+others are black, red, green, yellow, blue, magenta, cyan, white and gray.
+They come from your terminal's theme, so red in one theme can look
+different in another.
+
+A background fills the inside of a box or a window, and the inside of an
+oval's curve. For white letters on a blue box, set Text to white and Back
+to blue. On lines, text, fills and widgets, the background goes only behind
+the characters themselves.
+
+A selected shape shows its lines and letters in the selection color, but
+its background stays. To see a shape's real text color, click away, or
+open the color panel, which shows the real colors while it is open. The
+panel on the right shows a small swatch next to each colored shape.
+
+Colors work in every style, ascii included. Undo takes them off in one
+step, and copy, paste and ^D keep them. They are saved in the YAML by name,
+such as `fg: red` and `bg: blue`. The Markdown export keeps the characters
+and drops the colors.
+
 ### Duplicate
 
 **^D** copies the selected shapes and puts the copy two columns right and
@@ -317,6 +352,7 @@ When you are not typing, these letters work as commands:
 | `v` | switch to the Select tool; press again to go back | |
 | `t` | change the style of the selected shapes: ascii, line, round, double | |
 | `]` / `[` | bring to the front / send to the back | |
+| `C` (Shift-c) | set the text and background colors of the selected shapes | |
 
 They come from vim. Press Esc first if you are typing.
 

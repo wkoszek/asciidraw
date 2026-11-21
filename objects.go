@@ -93,8 +93,16 @@ func (o object) draw(c *canvas) {
 	if o.BG != "" && takesBG(o.Kind) { // paint the inside first
 		x0, x1 := order(o.X0, o.X1)
 		y0, y1 := order(o.Y0, o.Y1)
+		cx, cy := float64(x0+x1)/2, float64(y0+y1)/2
+		rx, ry := float64(x1-x0)/2, float64(y1-y0)/2
 		for y := y0 + 1; y < y1; y++ {
 			for x := x0 + 1; x < x1; x++ {
+				if o.Kind == "oval" { // only inside the curve, not its corners
+					dx, dy := (float64(x)-cx)/rx, (float64(y)-cy)/ry
+					if dx*dx+dy*dy >= 1 {
+						continue
+					}
+				}
 				c.paint(x, y)
 			}
 		}
