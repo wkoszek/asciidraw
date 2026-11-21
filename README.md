@@ -66,6 +66,30 @@ no turn. An arrow is the same line with a head on the end. A line can also
 attach to shapes and follow them when they move. An attached line picks its
 own turns; see Attached lines below.
 
+Where lines and shape edges meet, they join instead of one covering the
+other. The shapes stay separate: move one away, and the join goes away.
+
+```
+┌─────┐             ┌─────┐
+│     │             │     │
+│  ┌──┼──┐    ──────┤     │
+│  │  │  │          │     │
+└──┼──┘  │          └──┬──┘
+   │     │             │
+   └─────┘             │
+```
+
+Lines that cross make a cross: `┼` in the line and round styles, `╬` in
+double, and `+` in ascii. A line that ends square on a box's edge, away from
+its corners, makes a T, such as `┤` or `┬`. To get one, start the line away
+from the box and end it on the edge, or drag one of its ends onto the edge.
+Box edges, window borders and tall button borders all join this way. When
+two styles meet, the shape drawn last picks the style of the join.
+
+Arrowheads, text, labels and the curves of ovals don't join. Each covers
+whatever was drawn before it, and anything drawn later covers it. The
+Markdown export shows the joins just as the screen does.
+
 ## Widgets
 
 Widgets are ready-made UI parts. There are nine: button, checkbox, radio
