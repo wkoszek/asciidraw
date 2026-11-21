@@ -1576,3 +1576,32 @@ func TestAutosaveAndRecover(t *testing.T) {
 		t.Fatalf("untitled copy: %s", recoverPath(""))
 	}
 }
+
+func TestHelpFits80x24(t *testing.T) {
+	a := testAppSized(t, 80, 24)
+	a.help = true
+	a.render()
+	sim := a.s.(tcell.SimulationScreen)
+	cells, w, _ := sim.GetContents()
+	row := func(y int) string {
+		var b strings.Builder
+		for x := 0; x < w; x++ {
+			if r := cells[y*w+x].Runes; len(r) > 0 {
+				b.WriteRune(r[0])
+			}
+		}
+		return b.String()
+	}
+	var top, bottom int = -1, -1
+	for y := 0; y < 24; y++ {
+		if strings.Contains(row(y), "? Keys") {
+			top = y
+		}
+		if strings.Contains(row(y), "Any key closes this.") {
+			bottom = y
+		}
+	}
+	if top < 0 || bottom < 0 || !strings.Contains(row(top), "╮") {
+		t.Fatalf("help should fit whole on 80x24: top=%d bottom=%d\n%s", top, bottom, row(top))
+	}
+}
