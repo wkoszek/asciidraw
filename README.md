@@ -14,23 +14,34 @@ later. Save the drawing as YAML and export the picture as Markdown.
 ╰──────────────────╯
 ```
 
-You need a terminal that passes mouse clicks and drags to programs. asciidraw
-is built and used on macOS in Ghostty. On other systems everything works
-except the system clipboard: copy and paste stay inside asciidraw.
+You need a terminal that passes mouse clicks and drags to programs. I build and
+use asciidraw on macOS in Ghostty. It also runs on Linux, Windows and the
+BSDs.
 
 ## Install
 
-You need Go 1.27.3 or newer.
+On macOS or Linux, with Homebrew:
 
 ```sh
-git clone https://tig.koszek.com/wkoszek/asciidraw.git
-cd asciidraw
-make install
+brew install wkoszek/tap/asciidraw
 ```
 
-`make install` puts `asciidraw` in `$GOBIN`, or in `$(go env GOPATH)/bin`
-if `GOBIN` isn't set. That is usually `~/go/bin`. Make sure that folder is on
-your PATH.
+On Debian, Ubuntu, Fedora, Alpine or Arch, download the `.deb`, `.rpm`,
+`.apk` or `.pkg.tar.zst` file from the
+[releases page](https://github.com/wkoszek/asciidraw/releases) and install it
+with your package manager. The same page has a `.tar.gz` archive for macOS,
+Linux and the BSDs, and a `.zip` for Windows. Each holds the binary.
+
+With Go 1.24 or newer:
+
+```sh
+go install github.com/wkoszek/asciidraw@latest
+```
+
+Go puts `asciidraw` in `$GOBIN` if you set it, and in `$(go env GOPATH)/bin`
+otherwise. That is usually `~/go/bin`. Make sure that folder is on your PATH.
+
+`asciidraw --version` prints the version.
 
 ## Run
 
@@ -374,10 +385,12 @@ When you are not typing, these letters work as commands:
 
 They come from vim. Press Esc first if you are typing.
 
-Copying also puts the shape's picture on the macOS clipboard as plain text,
-so you can paste it into other apps. Paste uses whatever you copied last. If
-that was text from another app, it lands at the mouse as a new text shape.
-If you are typing, it goes into the text instead.
+Copying also puts a picture of your selection on the system clipboard as
+plain text, for other apps. See [The clipboard](#the-clipboard) for how that
+works on each system. Paste checks the system clipboard first. If it holds
+text from another app, that text becomes a new text shape at the mouse, or
+goes in at the cursor if you are typing. Otherwise paste uses the shapes you
+last copied in asciidraw.
 
 | Key | Does |
 |---|---|
@@ -488,13 +501,43 @@ asciidraw asks the terminal to pass Shift+drag through to it. If Shift+drag
 still selects text in Ghostty, add `mouse-shift-capture = true` to the same
 config file.
 
+## The clipboard
+
+On macOS, asciidraw uses `pbcopy` and `pbpaste`. On Windows and in WSL, it
+uses PowerShell. On Linux and the BSDs, it uses `wl-copy` and `wl-paste` under
+Wayland, or `xclip` or `xsel` under X11. Copy works without them, but you
+need one to paste text from other apps.
+
+Over SSH, without those programs, or when one of them fails, asciidraw sets
+the clipboard with an escape code called OSC 52. Ghostty, iTerm2, kitty,
+WezTerm, Windows Terminal and recent xterm all honor it. In tmux, add
+`set -g set-clipboard on` to `~/.tmux.conf`. asciidraw only writes through
+OSC 52, so paste then uses the shapes you last copied in asciidraw.
+
 ## Development
 
 ```sh
 make check     # gofmt, go vet, tests
 make run       # build and start; make run FILE=mock.yaml opens a file
+make snapshot  # build every release package into dist/, publish nothing
 make help      # every target
 ```
 
+To release, you need GoReleaser, `opc`, and a GitHub token in 1Password at
+`op://infra/github-pat-wkoszek/credential` that can publish releases and push
+to `wkoszek/homebrew-tap`. Tag the commit and run `make release`:
+
+```sh
+git tag -a v0.1.0 -m v0.1.0
+make release
+```
+
+That runs the tests and builds the archives and Linux packages. It then
+publishes them as a GitHub release and updates the cask in the Homebrew tap. The config is in `.goreleaser.yaml`.
+
 The tests drive the program through a fake terminal screen. They click,
 drag and type, then check the shapes and the saved files.
+
+## License
+
+BSD 2-Clause. See [LICENSE](LICENSE).

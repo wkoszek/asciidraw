@@ -1,13 +1,19 @@
-.PHONY: all build run test fmt vet check install uninstall clean check-conflicts help
+.PHONY: all build run test fmt vet check install uninstall clean check-conflicts snapshot release help
 
 BINARY_NAME = asciidraw
 GOBIN := $(shell go env GOPATH)/bin
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X main.version=$(VERSION)
+
+# GitHub token for `make release`: publishes the GitHub release and pushes the
+# cask to wkoszek/homebrew-tap.
+GITHUB_TOKEN_REF = op://infra/github-pat-wkoszek/credential
 
 all: check build
 
 ## build: compile ./asciidraw
 build: check-conflicts
-	go build -o $(BINARY_NAME) .
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) .
 
 ## run: build and start (make run FILE=mock.txt opens a file)
 run: build
@@ -36,7 +42,7 @@ check: check-conflicts
 
 ## install: install into $(GOBIN)
 install: check-conflicts
-	go install .
+	go install -ldflags "$(LDFLAGS)" .
 
 ## uninstall: remove the installed binary
 uninstall:
@@ -46,6 +52,18 @@ uninstall:
 clean:
 	go clean
 	rm -f $(BINARY_NAME)
+	rm -rf dist
+
+## snapshot: build every package into dist/, publish nothing
+snapshot: check-conflicts
+	HOMEBREW_TAP_TOKEN=unused goreleaser release --snapshot --clean
+
+## release: publish the tag at HEAD to GitHub Releases and the Homebrew tap
+release: check
+	@git describe --tags --exact-match >/dev/null 2>&1 || { \
+		echo "✗ HEAD has no tag. Tag it first: git tag -a v0.1.0 -m v0.1.0"; exit 1; }
+	@token=$$(opc read -n $(GITHUB_TOKEN_REF)) && \
+		GITHUB_TOKEN=$$token HOMEBREW_TAP_TOKEN=$$token goreleaser release --clean
 
 # Syncthing leaves `<name>.sync-conflict-<date>-<id>.<ext>` next to a file two
 # machines edited at once. A stray .go copy redeclares every symbol and the

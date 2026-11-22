@@ -1262,6 +1262,14 @@ func main() {
 	file, suggest, note := "", "", ""
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
+		switch arg {
+		case "-v", "--version":
+			fmt.Println("asciidraw", getVersion())
+			return
+		case "-h", "--help":
+			fmt.Print(usage)
+			return
+		}
 		var err error
 		objs, file, note, err = loadDrawing(arg)
 		switch {
@@ -1292,6 +1300,7 @@ func main() {
 	tty, hasTTY := s.Tty()
 	if hasTTY {
 		tty.Write([]byte("\x1b[>1s"))
+		osc52Out = tty // the clipboard of last resort; see sysclip.go
 	}
 	defer func() {
 		if hasTTY {

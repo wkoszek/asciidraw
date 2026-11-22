@@ -1,0 +1,113 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+#
+# One tag, every channel:  git tag v0.1.0 && make release
+#
+# Gitea is home, but the public downloads live in GitHub Releases: Homebrew,
+# Scoop, winget, AUR and Nix all fetch from a public URL, and package
+# reviewers expect GitHub. `make release` reads a GitHub token from 1Password.
+# `make snapshot` builds everything into dist/ and publishes nothing.
+version: 2
+
+project_name: asciidraw
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: asciidraw
+    binary: asciidraw
+    env:
+      - CGO_ENABLED=0 # pure Go: every target cross-compiles from one machine
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows, freebsd, openbsd, netbsd]
+    goarch: [amd64, arm64, arm]
+    goarm: ["7"]
+    ignore:
+      - { goos: darwin, goarch: arm }
+      - { goos: windows, goarch: arm }
+      - { goos: openbsd, goarch: arm }
+      - { goos: netbsd, goarch: arm }
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible builds
+
+archives:
+  - id: asciidraw
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: wkoszek
+    name: asciidraw
+  draft: false
+  prerelease: auto
+  name_template: "asciidraw {{ .Tag }}"
+
+# Debian, Ubuntu, Fedora, RHEL, Alpine and Arch packages, attached to the
+# release so people can install them by hand.
+nfpms:
+  - id: packages
+    package_name: asciidraw
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Adam Koszek
+    homepage: https://github.com/wkoszek/asciidraw
+    maintainer: Adam Koszek <adam@koszek.com>
+    description: Draw ASCII mockups in the terminal with your mouse.
+    license: BSD-2-Clause
+    section: utils
+    formats: [deb, rpm, apk, archlinux]
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/asciidraw/LICENSE
+      - src: README.md
+        dst: /usr/share/doc/asciidraw/README.md
+
+# brew install wkoszek/tap/asciidraw
+homebrew_casks:
+  - name: asciidraw
+    repository:
+      owner: wkoszek
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/wkoszek/asciidraw
+    description: Draw ASCII mockups in the terminal with your mouse
+    license: BSD-2-Clause
+    commit_author:
+      name: Adam Koszek
+      email: adam@koszek.com
+    # The binary isn't signed or notarized yet, so macOS would refuse to run
+    # it. Clear the quarantine flag that the download sets.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/asciidraw"]
+          end

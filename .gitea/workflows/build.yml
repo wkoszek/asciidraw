@@ -62,3 +62,10 @@ jobs:
 
       - name: go test
         run: go test -race ./...
+
+      # Release builds cover these systems; catch a break before tagging.
+      - name: cross-compile
+        run: |
+          for t in linux/arm64 darwin/arm64 windows/amd64 freebsd/amd64 openbsd/amd64 netbsd/amd64; do
+            GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -o /dev/null . || exit 1
+          done

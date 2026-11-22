@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -11,18 +10,8 @@ import (
 // pastes the object, unless the system clipboard holds other text (copied
 // from somewhere else since), which it pastes as text.
 
-// The system clipboard. Variables so tests can swap them out.
-var (
-	clipWrite = func(s string) error {
-		cmd := exec.Command("pbcopy")
-		cmd.Stdin = strings.NewReader(s)
-		return cmd.Run()
-	}
-	clipRead = func() (string, error) {
-		out, err := exec.Command("pbpaste").Output()
-		return string(out), err
-	}
-)
+// The system clipboard; see sysclip.go. Variables so tests can swap them out.
+var clipWrite, clipRead = pickClipboard()
 
 func cleanText(s string) string {
 	s = strings.ReplaceAll(s, "\r", "")

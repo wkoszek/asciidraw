@@ -18,5 +18,8 @@ notes: |
   frame composes them onto a character grid that also records which object
   drew each cell, for hit testing. ^S writes YAML (styles stored by name),
   ^E writes a fenced Markdown copy. y/d/p/x and ^C/^X/^V copy, cut and paste,
-  using pbcopy/pbpaste for the system clipboard. Asks Ghostty for Shift+mouse
-  via XTSHIFTESCAPE. Tests drive the app through a tcell simulation screen.
+  using the system clipboard: pbcopy, wl-copy/xclip/xsel, PowerShell, or
+  OSC 52 over SSH (sysclip.go). Releases go through GoReleaser to GitHub
+  Releases, a cask in wkoszek/homebrew-tap, and deb/rpm/apk/arch packages.
+  BSD 2-Clause. Asks Ghostty for Shift+mouse via XTSHIFTESCAPE. Tests drive
+  the app through a tcell simulation screen.
