@@ -43,7 +43,7 @@ func (a *app) autosave() {
 	if !a.dirty {
 		return
 	}
-	data, err := encodeYAML(a.objs)
+	data, err := encodeDoc(a.objs, a.pal)
 	if err != nil {
 		return
 	}
@@ -59,30 +59,30 @@ func (a *app) autosave() {
 func clearRecovery(file string) { os.Remove(recoverPath(file)) }
 
 // loadRecovery reads the recovery copy for a drawing, if there is one.
-func loadRecovery(file string) ([]object, time.Time, bool) {
+func loadRecovery(file string) ([]object, []string, time.Time, bool) {
 	p := recoverPath(file)
 	info, err := os.Stat(p)
 	if err != nil {
-		return nil, time.Time{}, false
+		return nil, nil, time.Time{}, false
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return nil, time.Time{}, false
+		return nil, nil, time.Time{}, false
 	}
-	objs, err := decodeYAML(data)
+	objs, pal, err := decodeDoc(data)
 	if err != nil {
-		return nil, time.Time{}, false
+		return nil, nil, time.Time{}, false
 	}
-	return objs, info.ModTime(), true
+	return objs, pal, info.ModTime(), true
 }
 
 // recover swaps in the recovery copy for the drawing just opened, if any.
 func (a *app) recover() {
-	objs, when, ok := loadRecovery(a.file)
+	objs, pal, when, ok := loadRecovery(a.file)
 	if !ok {
 		return
 	}
-	a.objs, a.dirty = objs, true
+	a.objs, a.pal, a.dirty = objs, pal, true
 	what := "unsaved changes"
 	if a.file == "" {
 		what = "an unsaved drawing"

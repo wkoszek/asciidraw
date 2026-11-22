@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -15,6 +16,7 @@ import (
 
 type fileDoc struct {
 	Version int          `yaml:"version"`
+	Palette []string     `yaml:"palette,omitempty"` // the 16 slots in the color panel
 	Objects []fileObject `yaml:"objects"`
 }
 
@@ -92,8 +94,15 @@ func styleIndex(name string) (int, bool) {
 	return 0, false
 }
 
-func encodeYAML(objs []object) ([]byte, error) {
+func encodeYAML(objs []object) ([]byte, error) { return encodeDoc(objs, nil) }
+
+// encodeDoc writes the objects and the palette. The palette is left out
+// while it is still the default one.
+func encodeDoc(objs []object, pal []string) ([]byte, error) {
 	doc := fileDoc{Version: 1, Objects: []fileObject{}}
+	if pal != nil && !slices.Equal(pal, defaultPal) {
+		doc.Palette = pal
+	}
 	for _, o := range objs {
 		f := fileObject{Kind: o.Kind, Group: o.Group, ID: o.ID, From: toFileAnchor(o.From), To: toFileAnchor(o.To), FG: o.FG, BG: o.BG}
 		if o.Kind == "text" {
@@ -122,10 +131,33 @@ func encodeYAML(objs []object) ([]byte, error) {
 }
 
 func decodeYAML(data []byte) ([]object, error) {
+	objs, _, err := decodeDoc(data)
+	return objs, err
+}
+
+// decodeDoc reads the objects and the palette. A file without a palette
+// gets the default one; a short one is filled up from it.
+func decodeDoc(data []byte) ([]object, []string, error) {
 	var doc fileDoc
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	if len(doc.Palette) > palSlots {
+		return nil, nil, fmt.Errorf("the palette has %d colors; it holds %d", len(doc.Palette), palSlots)
+	}
+	pal := slices.Clone(defaultPal)
+	for i, c := range doc.Palette {
+		name, ok := cleanColor(c)
+		if !ok || name == "" {
+			return nil, nil, fmt.Errorf("palette color %d: unknown color %q", i+1, c)
+		}
+		pal[i] = name
+	}
+	objs, err := decodeObjects(doc)
+	return objs, pal, err
+}
+
+func decodeObjects(doc fileDoc) ([]object, error) {
 	var objs []object
 	for i, f := range doc.Objects {
 		o := object{Kind: f.Kind, Group: f.Group, ID: f.ID}
@@ -181,8 +213,8 @@ func withExt(path, ext string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ext
 }
 
-func saveYAML(path string, objs []object) error {
-	data, err := encodeYAML(objs)
+func saveYAML(path string, objs []object, pal []string) error {
+	data, err := encodeDoc(objs, pal)
 	if err != nil {
 		return err
 	}
@@ -202,17 +234,17 @@ func markdown(picture string) string {
 // loadDrawing opens a .yaml drawing, or imports a .txt or .md picture as one
 // text object. saveTo is where ^S should write without asking: the file
 // itself for YAML, nothing for an import.
-func loadDrawing(path string) (objs []object, saveTo, note string, err error) {
+func loadDrawing(path string) (objs []object, pal []string, saveTo, note string, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, "", "", err
+		return nil, nil, "", "", err
 	}
 	if isYAML(path) {
-		objs, err = decodeYAML(data)
+		objs, pal, err = decodeDoc(data)
 		if err != nil {
-			return nil, "", "", fmt.Errorf("%s: %w", path, err)
+			return nil, nil, "", "", fmt.Errorf("%s: %w", path, err)
 		}
-		return objs, path, "", nil
+		return objs, pal, path, "", nil
 	}
 	text := strings.ReplaceAll(string(data), "\r", "")
 	if strings.EqualFold(filepath.Ext(path), ".md") {
@@ -222,7 +254,7 @@ func loadDrawing(path string) (objs []object, saveTo, note string, err error) {
 	if text != "" {
 		objs = []object{{Kind: "text", Text: strings.Split(text, "\n")}}
 	}
-	return objs, "", fmt.Sprintf("Imported %s as one text object. ^S saves it as YAML.", path), nil
+	return objs, slices.Clone(defaultPal), "", fmt.Sprintf("Imported %s as one text object. ^S saves it as YAML.", path), nil
 }
 
 // firstFence returns the inside of the first fenced code block, or all of

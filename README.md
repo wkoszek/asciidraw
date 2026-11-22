@@ -273,36 +273,38 @@ inside the box still types the box's label.
 
 ### Colors
 
-Select one or more shapes and press **C** (Shift-c). A small panel opens
-with two rows of colors: **Text** for a shape's lines and letters, and
-**Back** for its background. Each shape takes on a color as you move to it.
+Select one or more shapes and press **C** (Shift-c). If you're typing a
+label, press Esc first. A small panel opens with three rows, from top to
+bottom: **Text** for a shape's lines and letters, **Back** for its
+background, and **Pal**, a palette of 16 colors of your own.
 
-- The left and right arrow keys move between colors, and the up and down
-  arrow keys switch between the two rows. You can also click a color.
+- The up and down arrow keys move between rows. The left and right arrow
+  keys move along a row, and the selected shapes take on each color as you
+  go. You can also click a color.
 - Enter keeps the colors. Esc puts the old ones back. A click outside the
   color panel also keeps them.
 - Every selected shape gets the colors, including every shape in a
   selected group. Changing only the Text row leaves each shape's
   background as it was, and the other way around.
 
-There are ten choices. The first, shown as `··`, is the default: your
-terminal's normal text and background. Pick it to take a color off. The
-others are black, red, green, yellow, blue, magenta, cyan, white and gray.
-They come from your terminal's theme, so red in one theme can look
-different in another.
+The Text and Back rows each have ten choices. The first, shown as `··`, is
+the default: your terminal's normal text and background. Pick it to take a
+color off. The others are black, red, green, yellow, blue, magenta, cyan,
+white and gray. They come from your terminal's theme, so red in one theme
+can look different in another.
 
 For any other color, press `#` in the color panel. The status bar asks for
-a hex color, with the `#` already typed. Add three or six digits and
-letters from 0-9 and a-f, such as `ff8800`, or `f80` for short, and press
-Enter. Esc cancels, and a code that isn't a color is refused.
+a hex color, with the `#` already typed. Type three or six hex digits
+(0-9, a-f), such as `ff8800`, or `f80` for short, and press Enter. If the
+row already has a hex color, its code is typed in for you; Backspace erases
+it. Esc cancels, and a code that isn't a color is refused.
 
-The color goes into the row you're on, Text or Back, as an extra swatch at
-the end of the row. The arrow keys can reach it again. Each row has one
-such swatch, so a second hex color replaces the first. Press Enter once
-more to keep the colors, as with any other choice.
+On the Text and Back rows, the hex color goes in an extra swatch at the end
+of the row. The arrow keys can reach it again. Each row has one such
+swatch, so a second hex color replaces the first.
 
-Ghostty, which supports full color, shows hex colors exactly. Terminals
-without full color support show the nearest color they have.
+Ghostty, which supports 24-bit color, shows hex colors exactly. Terminals
+without it show the nearest color they have.
 
 A background fills the inside of a box or a window, and the inside of an
 oval's curve. For white letters on a blue box, set Text to white and Back
@@ -314,15 +316,52 @@ its background stays. To see a shape's real text color, click away, or
 open the color panel, which shows the real colors while it is open. The
 panel on the right shows a small swatch next to each colored shape.
 
-Colors work in every style, ascii included. Undo takes them off in one
-step, and copy, paste and ^D keep them. The Markdown export keeps the
-characters and drops the colors.
+Colors work in every style, ascii included. Undo puts back the colors a
+shape had before, in one step, and copy, paste and ^D keep them. The
+Markdown export keeps the characters and drops the colors.
 
 The YAML stores them as `fg` for the text color and `bg` for the
 background: named colors by name, such as `fg: red`, and hex colors in
 quotes, such as `fg: "#ff8800"`. Keep the quotes, since YAML reads a bare
 `#` as the start of a comment. When you edit a file by hand, `#FF8800` and
 `#f80` work too; asciidraw stores them as `#ff8800`.
+
+#### Your palette
+
+The Pal row holds 16 colors. It starts with four grays and twelve bright
+colors.
+
+A palette color goes on the text or the background. Which one depends on
+how you got to the Pal row. Press down from Back, and it colors the
+background. Press up from Text, which wraps around to the bottom, and it
+colors the text. The line under the palette says which one it is. On the
+Pal row, Space switches to the other one and puts the color there. With
+the mouse, click the word Text or Back, then click a palette color.
+
+To change a palette color, move to it and press `p`, or click
+**[ p Palette ]**. A grid of ready-made colors opens above the panel. It
+has 19 columns. The first runs from white through gray to black, and the
+other 18 are hues, each in six shades from light at the top to dark at the
+bottom. The arrow keys move through the grid, and the shapes show each
+color as you go.
+
+- Enter, Space or a click on a color puts it in the palette and closes the
+  grid. Press Enter again to keep it on the shapes.
+- Esc, or a click anywhere off the grid, closes the grid and leaves the
+  palette color as it was.
+- On the Pal row, `#` lets you type a hex code for that palette color.
+
+A shape keeps its own copy of a color. Changing a palette color later
+doesn't recolor shapes you already colored with it.
+
+The palette is saved with the drawing, as a list called `palette` in the
+YAML. The file has no `palette` list until you change a color. The list
+takes up to 16 colors, by name or as quoted hex codes, and any it leaves
+out keep their starting colors.
+
+^N (new drawing) keeps the palette, so the next drawing starts with the
+same colors. Esc on the color panel puts back the palette along with the
+shapes' colors. Undo doesn't change the palette.
 
 ### Duplicate
 

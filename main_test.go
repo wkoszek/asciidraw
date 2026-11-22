@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -82,7 +83,7 @@ func TestDrawTypeSave(t *testing.T) {
 	}
 
 	// The YAML brings the objects back.
-	objs, saveTo, note, err := loadDrawing(a.file)
+	objs, _, saveTo, note, err := loadDrawing(a.file)
 	if err != nil || note != "" || saveTo != a.file || !reflect.DeepEqual(objs, a.objs) {
 		t.Fatalf("reload: err=%v note=%q objs=%+v", err, note, objs)
 	}
@@ -137,7 +138,7 @@ func TestImport(t *testing.T) {
 	dir := t.TempDir()
 	md := filepath.Join(dir, "ui.md")
 	os.WriteFile(md, []byte("# Title\n\n````text\n+--+\n|ok|\n+--+\n````\nafter\n"), 0o644)
-	objs, saveTo, note, err := loadDrawing(md)
+	objs, _, saveTo, note, err := loadDrawing(md)
 	if err != nil || saveTo != "" || note == "" {
 		t.Fatalf("err=%v saveTo=%q note=%q", err, saveTo, note)
 	}
@@ -1804,5 +1805,106 @@ func TestHexInFilesIsForgiving(t *testing.T) {
 	}
 	if _, err := decodeYAML([]byte("objects:\n  - kind: box\n    fg: ff8800\n")); err == nil {
 		t.Fatal("hex without # in a file is still an error")
+	}
+}
+
+func TestPalette(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)
+	typeStr(a, "C")
+	// Up from Text wraps to the palette, which then colors the text.
+	ctrl(a, tcell.KeyUp)
+	ctrl(a, tcell.KeyRight)
+	if a.objs[0].FG != defaultPal[1] {
+		t.Fatalf("palette slot 2 on the text: %q", a.objs[0].FG)
+	}
+	// Space switches it to the background.
+	typeStr(a, " ")
+	ctrl(a, tcell.KeyRight)
+	if a.objs[0].BG != defaultPal[2] || a.objs[0].FG != defaultPal[1] {
+		t.Fatalf("palette on the background: %+v", a.objs[0])
+	}
+	// Coming down from Back, it colors the background too.
+	ctrl(a, tcell.KeyUp)
+	ctrl(a, tcell.KeyDown)
+	if a.colors.row != palRow || a.colors.target != 1 {
+		t.Fatalf("down from Back: %+v", a.colors)
+	}
+
+	// p opens the grid on the slot; moving tries colors, Esc puts it back.
+	typeStr(a, "p")
+	if a.colors.grid == nil {
+		t.Fatal("p opens the preset grid")
+	}
+	a.render()
+	ctrl(a, tcell.KeyRight)
+	if a.pal[2] == defaultPal[2] || a.objs[0].BG != a.pal[2] {
+		t.Fatalf("the grid tries colors live: pal=%q bg=%q", a.pal[2], a.objs[0].BG)
+	}
+	ctrl(a, tcell.KeyEscape)
+	if a.colors.grid != nil || a.pal[2] != defaultPal[2] || a.objs[0].BG != defaultPal[2] {
+		t.Fatalf("Esc in the grid: pal=%q bg=%q", a.pal[2], a.objs[0].BG)
+	}
+
+	// Click the button, then a swatch: blue 500 goes into the slot.
+	x0, y0, w, _ := a.pickerBox()
+	click(a, x0+w-4, y0+4)
+	if a.colors.grid == nil {
+		t.Fatal("the Palette button opens the grid")
+	}
+	gx, gy, _, _ := a.gridBox()
+	col, _, _ := presetAt("#3b82f6")
+	click(a, gx+2+col*3, gy+1+2)
+	if a.colors.grid != nil || a.pal[2] != "#3b82f6" || a.objs[0].BG != "#3b82f6" {
+		t.Fatalf("a click in the grid picks: pal=%q bg=%q", a.pal[2], a.objs[0].BG)
+	}
+	// A click on a palette slot uses it.
+	click(a, x0+8+4*3, y0+3)
+	if a.colors.slot != 4 || a.objs[0].BG != defaultPal[4] {
+		t.Fatalf("click a slot: %d %q", a.colors.slot, a.objs[0].BG)
+	}
+	ctrl(a, tcell.KeyEnter)
+	if !a.dirty || a.pal[2] != "#3b82f6" {
+		t.Fatal("Enter keeps the palette and marks the drawing changed")
+	}
+
+	// Saved with the drawing, and only when it isn't the default.
+	data := string(must(encodeDoc(a.objs, a.pal)))
+	if !strings.Contains(data, "palette:") || !strings.Contains(data, "#3b82f6") {
+		t.Fatalf("yaml:\n%s", data)
+	}
+	_, pal, err := decodeDoc([]byte(data))
+	if err != nil || !slices.Equal(pal, a.pal) {
+		t.Fatalf("round trip: %v %v", err, pal)
+	}
+	if strings.Contains(string(must(encodeDoc(a.objs, defaultPal))), "palette") {
+		t.Fatal("the default palette isn't written")
+	}
+	_, pal, err = decodeDoc([]byte("palette: ['#F80', red]\nobjects: []\n"))
+	if err != nil || pal[0] != "#ff8800" || pal[1] != "red" || pal[2] != defaultPal[2] {
+		t.Fatalf("a short palette fills up from the default: %v %v", err, pal)
+	}
+	if _, _, err := decodeDoc([]byte("palette: [nope]\nobjects: []\n")); err == nil {
+		t.Fatal("a bad palette color is an error")
+	}
+
+	// Esc on the whole picker undoes palette changes too.
+	click(a, 0, 0)
+	typeStr(a, "C")
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	typeStr(a, "p")
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyEnter)  // keep in the grid
+	ctrl(a, tcell.KeyEscape) // but not in the picker
+	if a.pal[2] != "#3b82f6" {
+		t.Fatalf("Esc in the picker puts the palette back: %v", a.pal)
+	}
+
+	// A new drawing keeps the palette.
+	a.dirty = false
+	ctrl(a, tcell.KeyCtrlN)
+	if a.pal[2] != "#3b82f6" {
+		t.Fatal("^N keeps the palette")
 	}
 }

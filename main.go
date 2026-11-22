@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -47,6 +48,7 @@ func (d *drag) moved() bool { return d.x0 != d.x1 || d.y0 != d.y1 }
 type app struct {
 	s      tcell.Screen
 	objs   []object
+	pal    []string // the color panel's 16 palette slots, saved with the drawing
 	undo   [][]object
 	redo   [][]object
 	file   string
@@ -90,12 +92,12 @@ type app struct {
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true}
+	return &app{s: s, pal: slices.Clone(defaultPal), sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true}
 }
 
 func (a *app) reset() {
 	n := newApp(a.s)
-	n.style, n.tool, n.showPanel = a.style, a.tool, a.showPanel
+	n.style, n.tool, n.showPanel, n.pal = a.style, a.tool, a.showPanel, a.pal // a new drawing keeps the palette
 	*a = *n
 }
 
@@ -218,7 +220,7 @@ func (a *app) unlessExists(path string, done func(string)) {
 
 func (a *app) write(path string) {
 	a.stopTyping()
-	if err := saveYAML(path, a.objs); err != nil {
+	if err := saveYAML(path, a.objs, a.pal); err != nil {
 		a.sayErr("Save failed: " + err.Error())
 		return
 	}
@@ -1259,6 +1261,7 @@ func (a *app) render() {
 
 func main() {
 	var objs []object
+	var pal []string
 	file, suggest, note := "", "", ""
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
@@ -1271,7 +1274,7 @@ func main() {
 			return
 		}
 		var err error
-		objs, file, note, err = loadDrawing(arg)
+		objs, pal, file, note, err = loadDrawing(arg)
 		switch {
 		case os.IsNotExist(err): // a new drawing under that name
 			file = arg
@@ -1311,6 +1314,9 @@ func main() {
 
 	a := newApp(s)
 	a.objs, a.file, a.suggest = objs, file, suggest
+	if pal != nil {
+		a.pal = pal
+	}
 	a.say("Drag to draw. Click to type. Press ? for every key.")
 	if note != "" {
 		a.say(note)
