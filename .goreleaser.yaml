@@ -14,6 +14,10 @@ before:
   hooks:
     - go mod tidy
     - go test ./...
+    - mandoc -Tlint -W warning asciidraw.1
+    # Debian and Fedora want man pages gzipped; -n keeps the build reproducible.
+    - mkdir -p build
+    - sh -c "gzip -9n -c asciidraw.1 > build/asciidraw.1.gz"
 
 builds:
   - id: asciidraw
@@ -55,6 +59,8 @@ archives:
     files:
       - LICENSE
       - README.md
+      - CHANGELOG.md
+      - asciidraw.1
 
 checksum:
   name_template: checksums.txt
@@ -99,6 +105,10 @@ nfpms:
         dst: /usr/share/licenses/asciidraw/LICENSE
       - src: README.md
         dst: /usr/share/doc/asciidraw/README.md
+      - src: CHANGELOG.md
+        dst: /usr/share/doc/asciidraw/CHANGELOG.md
+      - src: build/asciidraw.1.gz
+        dst: /usr/share/man/man1/asciidraw.1.gz
 
 # brew install wkoszek/tap/asciidraw
 homebrew_casks:
@@ -108,6 +118,7 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Casks
+    manpages: [asciidraw.1]
     homepage: https://github.com/wkoszek/asciidraw
     description: Draw ASCII mockups in the terminal with your mouse
     license: BSD-2-Clause
@@ -183,4 +194,5 @@ aurs:
       install -Dm755 ./asciidraw "${pkgdir}/usr/bin/asciidraw"
       install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/asciidraw/LICENSE"
       install -Dm644 ./README.md "${pkgdir}/usr/share/doc/asciidraw/README.md"
+      install -Dm644 ./asciidraw.1 "${pkgdir}/usr/share/man/man1/asciidraw.1"
     skip_upload: '{{ if not (isEnvSet "AUR_KEY") }}true{{ end }}'

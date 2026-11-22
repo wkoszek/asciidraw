@@ -41,7 +41,8 @@ go install github.com/wkoszek/asciidraw@latest
 Go puts `asciidraw` in `$GOBIN` if you set it, and in `$(go env GOPATH)/bin`
 otherwise. That is usually `~/go/bin`. Make sure that folder is on your PATH.
 
-`asciidraw --version` prints the version.
+`asciidraw --version` prints the version. `man asciidraw` shows the manual.
+`go install` installs only the binary, without the manual.
 
 ## Run
 
@@ -569,7 +570,9 @@ token in 1Password at `op://infra/github-pat-wkoszek/credential`. The token
 must be able to publish releases on `wkoszek/asciidraw` and push to
 `wkoszek/homebrew-tap`.
 
-Tag the commit, push the tag to tig (the mirror copies it to GitHub), and run
+Write the new version's section in `CHANGELOG.md` first. `make release`
+uses that section as the release notes and stops if there isn't one. Then
+tag the commit, push the tag to tig (the mirror copies it to GitHub), and run
 `make release`:
 
 ```sh

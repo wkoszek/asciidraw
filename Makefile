@@ -1,4 +1,4 @@
-.PHONY: all build run test fmt vet check install uninstall clean check-conflicts snapshot release help
+.PHONY: all build run test fmt vet check install uninstall clean check-conflicts snapshot release notes help
 
 BINARY_NAME = asciidraw
 GOBIN := $(shell go env GOPATH)/bin
@@ -52,7 +52,7 @@ uninstall:
 clean:
 	go clean
 	rm -f $(BINARY_NAME)
-	rm -rf dist
+	rm -rf dist build
 
 ## snapshot: build every package into dist/, unsigned; publish nothing
 snapshot: check-conflicts
@@ -62,8 +62,19 @@ snapshot: check-conflicts
 release: check
 	@git describe --tags --exact-match >/dev/null 2>&1 || { \
 		echo "✗ HEAD has no tag. Tag it first: git tag -a v0.1.0 -m v0.1.0"; exit 1; }
+	@$(MAKE) --no-print-directory notes
 	@token=$$(opc read -n $(GITHUB_TOKEN_REF)) && \
-		GITHUB_TOKEN=$$token HOMEBREW_TAP_TOKEN=$$token goreleaser release --clean
+		GITHUB_TOKEN=$$token HOMEBREW_TAP_TOKEN=$$token \
+		goreleaser release --clean --release-notes build/notes.md
+
+## notes: write the CHANGELOG.md section for the tag at HEAD to build/notes.md
+notes:
+	@tag=$${TAG:-$$(git describe --tags --exact-match 2>/dev/null)}; \
+	mkdir -p build; \
+	awk -v head="## $$tag " 'index($$0, head) == 1 { on = 1; next } /^## / { if (on) exit } on' \
+		CHANGELOG.md | sed '/./,$$!d' > build/notes.md; \
+	[ -s build/notes.md ] || { echo "✗ CHANGELOG.md has no section for $$tag. Write one first."; exit 1; }; \
+	echo "Release notes for $$tag: build/notes.md"
 
 # Syncthing leaves `<name>.sync-conflict-<date>-<id>.<ext>` next to a file two
 # machines edited at once. A stray .go copy redeclares every symbol and the

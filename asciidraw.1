@@ -1,0 +1,303 @@
+.\" asciidraw manual. Check with: mandoc -Tlint asciidraw.1
+.Dd November 22, 2026
+.Dt ASCIIDRAW 1
+.Os
+.Sh NAME
+.Nm asciidraw
+.Nd draw ASCII mockups in the terminal with the mouse
+.Sh SYNOPSIS
+.Nm
+.Op Ar file
+.Nm
+.Fl v | -version
+.Nm
+.Fl h | -help
+.Sh DESCRIPTION
+.Nm
+is a drawing program for the terminal.
+You drag the mouse to make boxes, ovals, lines and arrows, and click to type.
+You can also place widgets such as buttons, checkboxes, input fields and
+tabs.
+Each shape stays separate, so you can move, resize, copy or delete it later.
+.Pp
+With no
+.Ar file ,
+.Nm
+starts an untitled drawing.
+A
+.Pa .yaml
+file opens as a drawing.
+If it does not exist,
+.Nm
+starts a new drawing under that name.
+A
+.Pa .txt
+or
+.Pa .md
+file comes in as one text shape: the first code block fenced with backticks,
+or the whole file if there is none.
+The first save then offers the same name with
+.Pa .yaml .
+.Pp
+The terminal must pass mouse clicks and drags to programs.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl v , Fl -version
+Print the version and exit.
+.It Fl h , Fl -help
+Print a short usage message and exit.
+.El
+.Sh USAGE
+In this page,
+.Sq ^T
+means Ctrl+T.
+Press
+.Ic \&?
+inside
+.Nm
+for a summary of the keys.
+.Ss Drawing
+.Bl -tag -width "right-drag"
+.It drag
+On empty space, draw with the current tool.
+Shift while dragging a box or an oval makes it square or round.
+.It click
+On empty space, start typing.
+Inside a box or an oval, type that shape's label.
+With a widget tool, a click places the widget.
+With the Erase tool, a click deletes.
+.It right-drag
+Delete every shape the rectangle touches, with any tool.
+.It ^T
+Open the menu of tools (Box, Oval, Line, Arrow, Fill, Erase, Select),
+widgets and styles (ascii, line, round, double).
+.El
+.Pp
+A line goes sideways from where you press, turns once, then goes up or down
+to where you let go.
+Drag straight across or straight down for a line with no turn.
+.Pp
+To attach a line, start it in the empty cell just outside a shape, and end
+it on another shape's edge or just outside it.
+Don't start on the edge itself: pressing on a shape moves the shape.
+Lines attach to boxes, widgets, and the rectangle around an oval.
+An attached end follows its shape when the shape moves or changes size, and
+the line picks its own turns.
+.Pp
+Where lines, box edges, window borders and tall button borders meet, they
+join:
+.Sq \[u253C] ,
+.Sq \[u2524]
+and
+.Sq \[u252C]
+in the line and round styles,
+.Sq \[u256C]
+in double, and
+.Sq +
+in ascii.
+Oval curves, arrowheads and text don't join.
+.Ss Typing
+Enter starts a new line and Esc stops typing.
+The arrow keys, Home and End move the cursor.
+.Ss Selecting
+Click a shape to select it, and Shift+click to add or remove one.
+With the Select tool, drag a rectangle to select every shape fully inside it.
+.Bl -tag -width "Tab, Shift+Tab"
+.It v
+Switch to the Select tool; press it again to go back.
+.It ^A
+Select everything.
+.It Esc
+Clear the selection.
+.It Tab , Shift+Tab
+Select the next or the previous shape.
+.It g , ^G
+Group the selected shapes, or ungroup them.
+.El
+.Ss The selection
+When you are not typing, these keys act on the selected shapes.
+Press Esc first if you are typing.
+.Bl -tag -width "arrow keys"
+.It drag
+Move them.
+With one shape selected, drag a box corner or either end of a line to
+resize it.
+A selected oval shows
+.Sq +
+where its corners would be.
+.It arrow keys
+Nudge them one cell.
+.It y , ^C
+Copy.
+.It d , ^X
+Cut.
+.It p , ^V
+Paste at the mouse.
+.It x , Del
+Delete, and leave the clipboard alone.
+.It ^D
+Duplicate.
+.It \&] , \&[
+Bring to the front, or send to the back.
+.It t
+Change the style: ascii, line, round, double.
+On a fill, go to the next shade.
+.It C
+Open the color panel for text and background colors.
+.It Enter
+Edit the label or the text.
+.It Space
+Check or uncheck a checkbox or radio button, or make the next tab active.
+On a progress bar or a scrollbar, add 10; after 100 it goes back to 0.
+On a fill, go to the next of its eight shades.
+.El
+.Ss Files and view
+.Bl -tag -width "PgUp, PgDn"
+.It ^S
+Save the drawing as YAML.
+.It ^E
+Export the picture inside a Markdown code block.
+For
+.Pa mock.yaml
+it writes
+.Pa mock.md
+in the same folder.
+It asks for a name if the drawing has none, and asks before it replaces a
+file the first time in a session.
+Exporting does not save the drawing.
+.It ^N
+Start a new drawing.
+.It ^Q
+Quit.
+With unsaved changes, ^N and ^Q warn you first; press the key again to go
+ahead.
+.It ^Z , ^Y
+Undo, redo.
+.It ^O
+Show or hide the panel.
+.It wheel
+Scroll up and down; with Shift, sideways.
+.It PgUp , PgDn
+Scroll half a window.
+.It Home
+Go back to the top left.
+.It \&?
+Show the key summary.
+.El
+.Sh CLIPBOARD
+Copying also puts a picture of the selection on the system clipboard as
+plain text.
+Paste checks the system clipboard first.
+If it holds text from another app, that text becomes a new text shape at the
+mouse, or goes in at the cursor if you are typing.
+Otherwise paste uses the shapes last copied in
+.Nm .
+.Pp
+On macOS,
+.Nm
+uses
+.Xr pbcopy 1
+and
+.Xr pbpaste 1 .
+On Windows and in WSL, it uses PowerShell.
+On Linux and the BSDs, it uses
+.Xr wl-copy 1
+and
+.Xr wl-paste 1
+under Wayland, or
+.Xr xclip 1
+or
+.Xr xsel 1
+under X11.
+.Pp
+Over SSH, or with none of those programs, copy uses the OSC 52 escape code,
+which asks the terminal to set its clipboard.
+Most modern terminals honor it.
+In
+.Xr tmux 1 ,
+turn on
+.Ql set -g set-clipboard on .
+.Nm
+can't read the clipboard this way, so paste uses the shapes last copied in
+.Nm .
+If a clipboard program fails to copy, copy falls back to OSC 52 too.
+.Sh ENVIRONMENT
+.Bl -tag -width "WAYLAND_DISPLAY"
+.It Ev SSH_TTY , Ev SSH_CONNECTION
+If either is set, copy uses OSC 52, so it reaches the clipboard of the
+machine in front of you.
+This comes before every other choice.
+.It Ev WSL_DISTRO_NAME
+If set, and
+.Pa powershell.exe
+is on the
+.Ev PATH ,
+use it for the Windows clipboard.
+.It Ev WAYLAND_DISPLAY
+If set, use
+.Xr wl-copy 1
+and
+.Xr wl-paste 1
+when both are installed.
+.It Ev DISPLAY
+If set, and Wayland's programs weren't found, use
+.Xr xclip 1
+if it is installed, or else
+.Xr xsel 1 .
+.It Ev XDG_CACHE_HOME
+On Linux and the BSDs, recovery copies go under this folder instead of
+.Pa ~/.cache .
+.El
+.Sh FILES
+Every 30 seconds,
+.Nm
+writes unsaved changes to a recovery copy.
+The next time you open the same drawing, it loads the copy and says so.
+Saving deletes the copy, and so does throwing the changes away with ^Q or ^N
+pressed twice.
+The copies live in the user cache folder:
+.Bl -tag -width Ds
+.It Pa ~/Library/Caches/asciidraw/recover/
+on macOS
+.It Pa ~/.cache/asciidraw/recover/
+on Linux and the BSDs
+.It Pa %LocalAppData%\easciidraw\erecover\e
+on Windows
+.El
+.Pp
+If there is no cache folder,
+.Nm
+uses the system's temporary folder instead.
+A named drawing's copy takes its full path, with each slash turned into
+.Sq % .
+An untitled drawing's copy is
+.Pa untitled.yaml ,
+and comes back the next time you start
+.Nm
+with no file.
+Two untitled sessions at once share that copy, and the last one to write it
+wins.
+.Sh EXIT STATUS
+.Ex -std
+.Sh EXAMPLES
+Start a new drawing called
+.Pa login.yaml :
+.Pp
+.Dl asciidraw login.yaml
+.Pp
+Bring in the first code block of a Markdown file:
+.Pp
+.Dl asciidraw notes.md
+.Sh SEE ALSO
+.Xr pbcopy 1 ,
+.Xr pbpaste 1 ,
+.Xr tmux 1 ,
+.Xr wl-copy 1 ,
+.Xr wl-paste 1 ,
+.Xr xclip 1 ,
+.Xr xsel 1
+.Pp
+The project page:
+.Lk https://github.com/wkoszek/asciidraw
+.Sh AUTHORS
+.An Adam Koszek Aq Mt adam@koszek.com
