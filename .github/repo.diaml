@@ -21,5 +21,9 @@ notes: |
   using the system clipboard: pbcopy, wl-copy/xclip/xsel, PowerShell, or
   OSC 52 over SSH (sysclip.go). Releases go through GoReleaser to GitHub
   Releases, a cask in wkoszek/homebrew-tap, and deb/rpm/apk/arch packages.
+  The macOS binary is universal, signed with the Developer ID and notarized
+  by scripts/macos-sign.sh (notarytool profile sense-notary). Scoop, winget
+  and AUR are configured but publish only with PUBLISH_SCOOP, PUBLISH_WINGET
+  and AUR_KEY set.
   BSD 2-Clause. Asks Ghostty for Shift+mouse via XTSHIFTESCAPE. Tests drive
   the app through a tcell simulation screen.

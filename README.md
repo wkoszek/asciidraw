@@ -523,17 +523,39 @@ make snapshot  # build every release package into dist/, publish nothing
 make help      # every target
 ```
 
-To release, you need GoReleaser, `opc`, and a GitHub token in 1Password at
-`op://infra/github-pat-wkoszek/credential` that can publish releases and push
-to `wkoszek/homebrew-tap`. Tag the commit and run `make release`:
+To release, use a Mac with GoReleaser and `opc`. It needs the Developer ID
+Application certificate in the keychain and a notarytool profile;
+`scripts/macos-sign.sh` shows how to make the profile. It also needs a GitHub
+token in 1Password at `op://infra/github-pat-wkoszek/credential`. The token
+must be able to publish releases on `wkoszek/asciidraw` and push to
+`wkoszek/homebrew-tap`.
+
+Tag the commit, push the tag to tig (the mirror copies it to GitHub), and run
+`make release`:
 
 ```sh
 git tag -a v0.1.0 -m v0.1.0
+git push tig main v0.1.0
 make release
 ```
 
-That runs the tests and builds the archives and Linux packages. It then
-publishes them as a GitHub release and updates the cask in the Homebrew tap. The config is in `.goreleaser.yaml`.
+`make release` runs `make check`, then hands off to GoReleaser. GoReleaser
+builds the archives and Linux packages. It signs the macOS binary and has
+Apple notarize it. Last, it publishes the GitHub release and updates the cask
+in the Homebrew tap. The settings are in `.goreleaser.yaml`.
+
+Three more channels stay off unless you ask for them. `PUBLISH_SCOOP=1`
+pushes to `wkoszek/scoop-bucket`. `PUBLISH_WINGET=1` pushes to the fork
+`wkoszek/winget-pkgs` and opens a pull request on `microsoft/winget-pkgs`.
+For both, the token must reach those repos too. `AUR_KEY` holds the SSH
+private key for your AUR account, and setting it uploads `asciidraw-bin`:
+
+```sh
+PUBLISH_SCOOP=1 PUBLISH_WINGET=1 AUR_KEY="$(cat ~/.ssh/aur)" make release
+```
+
+`make snapshot` builds every package unsigned into `dist/` and publishes
+nothing.
 
 The tests drive the program through a fake terminal screen. They click,
 drag and type, then check the shapes and the saved files.

@@ -34,6 +34,17 @@ builds:
       - { goos: netbsd, goarch: arm }
     mod_timestamp: "{{ .CommitTimestamp }}" # reproducible builds
 
+# One macOS binary for Apple silicon and Intel, so there is one thing to sign
+# and notarize. scripts/macos-sign.sh does both; MACOS_SIGN=0 skips it.
+universal_binaries:
+  - id: asciidraw
+    replace: true
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        - cmd: ./scripts/macos-sign.sh "{{ .Path }}"
+          output: true
+
 archives:
   - id: asciidraw
     formats: [tar.gz]
@@ -103,11 +114,73 @@ homebrew_casks:
     commit_author:
       name: Adam Koszek
       email: adam@koszek.com
-    # The binary isn't signed or notarized yet, so macOS would refuse to run
-    # it. Clear the quarantine flag that the download sets.
-    hooks:
-      post:
-        install_steps: |
-          on_macos do
-            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/asciidraw"]
-          end
+
+# The channels below publish only when their switch is set, so a release
+# works before each one is set up. make release sets them from 1Password.
+
+# scoop bucket add wkoszek https://github.com/wkoszek/scoop-bucket
+# scoop install wkoszek/asciidraw
+scoops:
+  - name: asciidraw
+    repository:
+      owner: wkoszek
+      name: scoop-bucket
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: bucket
+    homepage: https://github.com/wkoszek/asciidraw
+    description: Draw ASCII mockups in the terminal with your mouse.
+    license: BSD-2-Clause
+    commit_author:
+      name: Adam Koszek
+      email: adam@koszek.com
+    skip_upload: '{{ if ne (envOrDefault "PUBLISH_SCOOP" "") "1" }}true{{ end }}'
+
+# winget install wkoszek.asciidraw
+# Opens a pull request on microsoft/winget-pkgs from the fork wkoszek/winget-pkgs.
+winget:
+  - name: asciidraw
+    publisher: Adam Koszek
+    package_identifier: wkoszek.asciidraw
+    publisher_url: https://github.com/wkoszek
+    homepage: https://github.com/wkoszek/asciidraw
+    short_description: Draw ASCII mockups in the terminal with your mouse.
+    license: BSD-2-Clause
+    license_url: https://github.com/wkoszek/asciidraw/blob/main/LICENSE
+    tags: [ascii, diagrams, mockups, terminal, tui]
+    commit_author:
+      name: Adam Koszek
+      email: adam@koszek.com
+    repository:
+      owner: wkoszek
+      name: winget-pkgs
+      branch: "asciidraw-{{ .Version }}"
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+    skip_upload: '{{ if ne (envOrDefault "PUBLISH_WINGET" "") "1" }}true{{ end }}'
+
+# yay -S asciidraw-bin
+aurs:
+  - name: asciidraw-bin
+    homepage: https://github.com/wkoszek/asciidraw
+    description: Draw ASCII mockups in the terminal with your mouse
+    maintainers:
+      - Adam Koszek <adam@koszek.com>
+    license: BSD-2-Clause
+    provides: [asciidraw]
+    conflicts: [asciidraw]
+    private_key: '{{ if isEnvSet "AUR_KEY" }}{{ .Env.AUR_KEY }}{{ end }}'
+    git_url: ssh://aur@aur.archlinux.org/asciidraw-bin.git
+    commit_author:
+      name: Adam Koszek
+      email: adam@koszek.com
+    package: |-
+      install -Dm755 ./asciidraw "${pkgdir}/usr/bin/asciidraw"
+      install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/asciidraw/LICENSE"
+      install -Dm644 ./README.md "${pkgdir}/usr/share/doc/asciidraw/README.md"
+    skip_upload: '{{ if not (isEnvSet "AUR_KEY") }}true{{ end }}'

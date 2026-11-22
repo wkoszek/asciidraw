@@ -54,9 +54,9 @@ clean:
 	rm -f $(BINARY_NAME)
 	rm -rf dist
 
-## snapshot: build every package into dist/, publish nothing
+## snapshot: build every package into dist/, unsigned; publish nothing
 snapshot: check-conflicts
-	HOMEBREW_TAP_TOKEN=unused goreleaser release --snapshot --clean
+	HOMEBREW_TAP_TOKEN=unused MACOS_SIGN=0 goreleaser release --snapshot --clean
 
 ## release: publish the tag at HEAD to GitHub Releases and the Homebrew tap
 release: check
