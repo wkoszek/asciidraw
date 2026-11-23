@@ -2,6 +2,11 @@
 
 Draw ASCII mockups in the terminal with your mouse.
 
+**Star the repo to help asciidraw get into Homebrew's main list.** Homebrew
+considers a new package once its repo has 225 stars and is 30 days old. If
+it gets in, you'll type `brew install asciidraw` instead of
+`brew install wkoszek/tap/asciidraw`.
+
 You drag to make boxes, ovals, lines and arrows. You click to type. You can
 also add widgets, such as buttons, checkboxes, input fields and tabs. Each
 shape stays separate, so you can move it, resize it, copy it or delete it
