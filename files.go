@@ -38,6 +38,7 @@ type fileObject struct {
 	To    *fileAnchor `yaml:"to,omitempty"`
 	FG    string      `yaml:"fg,omitempty"`
 	BG    string      `yaml:"bg,omitempty"`
+	Place string      `yaml:"place,omitempty"` // a label's position, like "top left"; none means centered
 }
 
 // fileAnchor is an attached line end: the shape's id, the side (left,
@@ -112,6 +113,9 @@ func encodeDoc(objs []object, pal []string) ([]byte, error) {
 			f.X0, f.Y0, f.X1, f.Y1 = ptr(o.X0), ptr(o.Y0), ptr(o.X1), ptr(o.Y1)
 			if isWidget(o.Kind) || hasLabel(o.Kind) {
 				f.Text = o.Text
+			}
+			if hasLabel(o.Kind) && (o.HAlign != 0 || o.VAlign != 0) {
+				f.Place = placeName(o.HAlign, o.VAlign)
 			}
 			if hasValue[o.Kind] {
 				f.Value = ptr(o.Value)
@@ -194,6 +198,15 @@ func decodeObjects(doc fileDoc) ([]object, error) {
 			o.X0, o.Y0, o.X1, o.Y1 = val(f.X0), val(f.Y0), val(f.X1), val(f.Y1)
 			if isWidget(f.Kind) || hasLabel(f.Kind) {
 				o.Text = f.Text
+			}
+			if f.Place != "" {
+				h, v, ok := parsePlace(f.Place)
+				if !ok {
+					return nil, fmt.Errorf("object %d: unknown place %q", i+1, f.Place)
+				}
+				if hasLabel(f.Kind) {
+					o.HAlign, o.VAlign = h, v
+				}
 			}
 			o.Value = val(f.Value)
 			o.normalize()

@@ -23,6 +23,8 @@ type object struct {
 	To    anchor // what a line's end is attached to
 	FG    string // text color by name, "" for the default; see color.go
 	BG    string // background color by name
+
+	HAlign, VAlign int // where a box's or oval's label sits: -1 left/top, 0 center, 1 right/bottom
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text", "fill": "Fill"}

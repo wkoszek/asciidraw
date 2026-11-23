@@ -4,6 +4,14 @@ Each release gets a section here, newest first. `make release` copies the
 section for the tag being released into the GitHub release notes, so write it
 before you tag.
 
+## Unreleased
+
+- `a` lines up the selected shapes by their edges or centers, or spaces
+  them out evenly.
+- `T` places the label in a box or an oval in one of nine spots, such as
+  top left or bottom right. The drawing file stores any spot but center as
+  `place`.
+
 ## v0.1.0 (2026-11-22)
 
 The first release.

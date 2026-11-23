@@ -1,8 +1,8 @@
 package main
 
 // Box and oval labels. A label lives in the shape's Text, so it moves,
-// copies and deletes with the shape. It is drawn centered inside, and the
-// shape grows to fit it.
+// copies and deletes with the shape. It is drawn centered inside unless T
+// put it somewhere else (HAlign, VAlign), and the shape grows to fit it.
 
 func hasLabel(kind string) bool { return kind == "box" || kind == "oval" }
 
@@ -17,11 +17,55 @@ func labelRoom(kind string) (int, int) {
 
 // labelStart gives where line k of the label starts.
 func (o object) labelStart(k int) (int, int) {
+	w := 0
+	for _, l := range o.Text {
+		w = max(w, runeLen(l))
+	}
+	return o.placeLine(k, runeLen(o.Text[k]), w, len(o.Text))
+}
+
+// labelArea is the rectangle a label can sit in when it isn't centered:
+// inside the border with a blank column each side for a box, and the
+// rectangle that fits inside the curve for an oval.
+func (o object) labelArea() (ax0, ay0, ax1, ay1 int) {
+	x0, x1 := order(o.X0, o.X1)
+	y0, y1 := order(o.Y0, o.Y1)
+	if o.Kind != "oval" {
+		return x0 + 2, y0 + 1, x1 - 2, y1 - 1
+	}
+	// An ellipse's widest inside rectangle reaches 1/√2 of each half-axis.
+	cx2, cy2 := x0+x1, y0+y1 // twice the center, to keep it in whole numbers
+	hw, hh := (x1-x0)*707/2000, (y1-y0)*707/2000
+	return (cx2+1)/2 - hw + 1, (cy2+1)/2 - hh, cx2/2 + hw - 1, cy2/2 + hh
+}
+
+// placeLine gives where line k starts, for a line lw wide in a label w
+// wide and n lines tall. A centered label, or one too big for labelArea
+// either way, sits in the middle of the inside, so it never crosses an
+// oval's curve.
+func (o object) placeLine(k, lw, w, n int) (int, int) {
 	x0, x1 := order(o.X0, o.X1)
 	y0, y1 := order(o.Y0, o.Y1)
 	innerW, innerH := x1-x0-1, y1-y0-1
-	top := y0 + 1 + max(innerH-len(o.Text), 0)/2
-	return x0 + 1 + max(innerW-runeLen(o.Text[k]), 0)/2, top + k
+	x := x0 + 1 + max(innerW-lw, 0)/2
+	y := y0 + 1 + max(innerH-n, 0)/2
+	ax0, ay0, ax1, ay1 := o.labelArea()
+	if w > ax1-ax0+1 || n > ay1-ay0+1 {
+		return x, y + k
+	}
+	switch o.HAlign {
+	case -1:
+		x = ax0
+	case 1:
+		x = ax1 - lw + 1
+	}
+	switch o.VAlign {
+	case -1:
+		y = ay0
+	case 1:
+		y = ay1 - n + 1
+	}
+	return x, y + k
 }
 
 func drawLabel(c *canvas, o object) {
@@ -53,9 +97,12 @@ func (o *object) fitLabel() {
 // labelCursor is where the next typed letter of a label goes.
 func (o object) labelCursor() (int, int) {
 	if len(o.Text) == 0 {
-		x0, x1 := order(o.X0, o.X1)
-		y0, y1 := order(o.Y0, o.Y1)
-		return (x0 + x1) / 2, (y0 + y1) / 2
+		if o.HAlign == 0 && o.VAlign == 0 {
+			x0, x1 := order(o.X0, o.X1)
+			y0, y1 := order(o.Y0, o.Y1)
+			return (x0 + x1) / 2, (y0 + y1) / 2
+		}
+		return o.placeLine(0, 0, 0, 1)
 	}
 	k := len(o.Text) - 1
 	x, y := o.labelStart(k)

@@ -42,6 +42,8 @@ var helpRight = []string{
 	"  ]  [           front, back",
 	"  t              next style",
 	"  C              colors",
+	"  a              align, spread out",
+	"  T              label position",
 	"  Enter          edit label or text",
 	"  Space          toggle, next shade",
 }

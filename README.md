@@ -167,10 +167,11 @@ Widgets export to Markdown like everything else.
 
 ### Labels
 
-A box or an oval can have a label. With Box, Oval, Line or Arrow picked,
-click the empty space inside the shape and type. Enter starts a new line
-and Esc stops typing. The label sits in the middle of the shape. Move, copy
-or delete the shape, and the label goes with it.
+A box or an oval can have a label. Pick the Box, Oval, Line or Arrow tool,
+then click the empty space inside a box or an oval and type. Enter starts a
+new line and Esc stops typing. The label sits in the middle of the shape,
+unless you move it with **T** (Shift-t; see Label position below). Move,
+copy or delete the shape, and the label goes with it.
 
 ```
 +-----------+
@@ -190,12 +191,43 @@ select it and press Enter. Either way, the cursor starts after the last
 letter, and you edit as with any text (see Changing shapes).
 Backspace over every letter, and the label is gone; the shape stays.
 
-The panel shows each label next to its shape. Widgets have labels too, but
-you edit those in the status bar; see Widgets above.
+The shape list on the right shows each label next to its shape. Widgets
+have labels too, but you edit those in the status bar; see Widgets above.
 
 To add text that isn't part of the shape, Shift-click the empty space
 inside it. That text is a shape of its own, and it doesn't move with the box
 unless you group them (see Groups below).
+
+#### Label position
+
+Select a box or an oval and press **T** (Shift-t) to choose where its
+label sits. Press Esc first if you're typing. A small window opens with
+nine buttons:
+
+```
+[ top left    ] [ top center    ] [ top right    ]
+[ center left ] [ center        ] [ center right ]
+[ bottom left ] [ bottom center ] [ bottom right ]
+```
+
+The arrow keys move between the buttons, and the label moves with them, so
+you see each spot on the shape. Enter keeps the new spot. Esc puts the
+label back where it was before you pressed T. A click on a button picks
+it and closes the window. A click outside the window keeps the spot the
+arrows reached.
+
+The number keys work like a keypad: `7` is top left, `5` is center and `3`
+is bottom right. One press picks the spot and closes the window.
+
+A label on the left or right keeps one blank column from the border. In an
+oval, the label stays inside the curve, so it sits a little farther in. If
+the label fills the shape, it has no room to move and stays centered; give
+the shape more room and it moves to the spot you picked. Every selected box
+and oval gets the same spot. Lines, widgets and loose text in the selection
+stay as they are. One ^Z undoes the move.
+
+The YAML saves the spot as `place`, such as `place: top left`. When you
+pick center, the file has no `place`.
 
 ### Attached lines
 
@@ -407,6 +439,43 @@ a group with other shapes, **g** makes one new group of all of them. Groups
 don't nest. Groups are saved with the drawing, and a pasted copy of a group
 is a new group.
 
+### Align and spread out
+
+Select two or more shapes and press **a**. The status bar lists the
+choices. Press one more key:
+
+| Key | Does |
+|---|---|
+| `h` or ← | lines up the left edges |
+| `l` or → | lines up the right edges |
+| `k` or ↑ | lines up the top edges |
+| `j` or ↓ | lines up the bottom edges |
+| `c` | lines up the centers from left to right, as in a column |
+| `m` | lines up the centers from top to bottom, as in a row |
+| `x` | spreads the shapes out evenly, left to right |
+| `y` | spreads the shapes out evenly, top to bottom |
+
+Esc, any other key, or a click cancels. A cancelling click does nothing
+else.
+
+Each command moves the shapes one way only. Lining up left edges moves
+shapes sideways, to the leftmost edge in the selection. Lining up top
+edges moves them up or down. `c` and `m` line the shapes up on the center
+of the whole selection.
+
+Spreading needs three or more shapes. For `x`, the leftmost and rightmost
+shapes stay put, and the ones between move so the gaps are all the same.
+For `y`, the topmost and bottommost stay put. If the space doesn't divide
+evenly, some gaps are one cell wider. If the shapes are too wide for the
+space, they overlap by the same amount.
+
+A selected group counts as one shape. Its shapes move together and keep
+their places inside it. If you picked one shape out of a group, that shape
+moves alone. Lines attached to shapes don't count. Their attached ends
+move with their shapes.
+
+One ^Z undoes the whole move.
+
 ## Keys
 
 When you are not typing, these letters work as commands:
@@ -422,6 +491,8 @@ When you are not typing, these letters work as commands:
 | `t` | change the style of the selected shapes: ascii, line, round, double | |
 | `]` / `[` | bring to the front / send to the back | |
 | `C` (Shift-c) | set the text and background colors of the selected shapes | |
+| `T` (Shift-t) | choose where the label sits in a box or an oval | |
+| `a` | align or spread out the selected shapes, then press a second key (see Align and spread out) | |
 
 They come from vim. Press Esc first if you are typing.
 
@@ -566,7 +637,7 @@ make help      # every target
 To release, use a Mac with GoReleaser and `opc`. It needs the Developer ID
 Application certificate in the keychain and a notarytool profile;
 `scripts/macos-sign.sh` shows how to make the profile. It also needs a GitHub
-token in 1Password at `op://infra/github-pat-wkoszek/credential`. The token
+token in 1Password at `op://infra/github-pat-wkoszek/token`. The token
 must be able to publish releases on `wkoszek/asciidraw` and push to
 `wkoszek/homebrew-tap`.
 

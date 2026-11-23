@@ -1908,3 +1908,272 @@ func TestPalette(t *testing.T) {
 		t.Fatal("^N keeps the palette")
 	}
 }
+
+// boxesAt makes boxes from {x, y, w, h}, selects them all, and gives the app.
+func boxesAt(t *testing.T, r ...[4]int) *app {
+	a := testAppSized(t, 120, 40)
+	for k, b := range r {
+		a.objs = append(a.objs, object{Kind: "box", X0: b[0], Y0: b[1], X1: b[0] + b[2] - 1, Y1: b[1] + b[3] - 1, ID: k + 1})
+	}
+	a.selectAll()
+	return a
+}
+
+func alignWith(a *app, keys string) {
+	for _, r := range keys {
+		typeStr(a, string(r))
+	}
+}
+
+func TestAlign(t *testing.T) {
+	r := [][4]int{{4, 2, 6, 3}, {20, 7, 10, 5}, {40, 4, 4, 9}}
+	for _, tc := range []struct {
+		key  string
+		want func(o object) int
+		val  int
+	}{
+		{"h", func(o object) int { return o.X0 }, 4},
+		{"l", func(o object) int { return o.X1 }, 43},
+		{"k", func(o object) int { return o.Y0 }, 2},
+		{"j", func(o object) int { return o.Y1 }, 12},
+		{"c", func(o object) int { x, _, w, _ := o.bounds(); return x + (w-1)/2 }, 23},
+		{"m", func(o object) int { _, y, _, h := o.bounds(); return y + (h-1)/2 }, 7},
+	} {
+		a := boxesAt(t, r...)
+		alignWith(a, "a"+tc.key)
+		for i, o := range a.objs {
+			if got := tc.want(o); got != tc.val {
+				t.Errorf("a%s: shape %d at %d, want %d", tc.key, i, got, tc.val)
+			}
+		}
+		if a.msgErr || a.aligning {
+			t.Errorf("a%s: %q", tc.key, a.msg)
+		}
+		ctrl(a, tcell.KeyCtrlZ)
+		if a.objs[1].X0 != 20 || a.objs[1].Y0 != 7 {
+			t.Errorf("a%s: one undo puts it back: %+v", tc.key, a.objs[1])
+		}
+	}
+
+	// Arrow keys work too, and only the other axis stays put.
+	a := boxesAt(t, r...)
+	typeStr(a, "a")
+	a.render()
+	if !a.aligning {
+		t.Fatal("a waits for a second key")
+	}
+	ctrl(a, tcell.KeyLeft)
+	if a.objs[1].X0 != 4 || a.objs[1].Y0 != 7 {
+		t.Fatalf("a← lines up left edges: %+v", a.objs[1])
+	}
+	// Doing it again changes nothing.
+	alignWith(a, "ah")
+	if a.msg != "Already lined up." {
+		t.Fatalf("again: %q", a.msg)
+	}
+	// Any other key cancels, and so does a click.
+	alignWith(a, "aq")
+	if a.aligning || a.objs[1].X0 != 4 {
+		t.Fatal("a then q cancels")
+	}
+	typeStr(a, "a")
+	n := len(a.objs)
+	drag2(a, 60, 20, 70, 25)
+	if a.aligning || len(a.objs) != n {
+		t.Fatal("a click cancels, and draws nothing")
+	}
+	// One shape isn't enough; nothing selected explains.
+	a.setSelection([]int{0}, 0)
+	alignWith(a, "ah")
+	if !a.msgErr {
+		t.Fatal("aligning one shape should explain")
+	}
+	a.sel = -1
+	typeStr(a, "a")
+	if !a.msgErr || a.aligning {
+		t.Fatal("a with nothing selected should explain")
+	}
+}
+
+func TestSpread(t *testing.T) {
+	// Out of order on purpose: spreading goes by position, not drawing order.
+	a := boxesAt(t, [4]int{30, 0, 5, 3}, [4]int{0, 5, 4, 3}, [4]int{8, 2, 6, 3}, [4]int{50, 9, 3, 3})
+	alignWith(a, "ax")
+	// Span 0..52, widths 4+6+5+3 = 18, so 35 cells of gaps in 3: 11, 12, 12.
+	var xs []int
+	for _, i := range []int{1, 2, 0, 3} {
+		xs = append(xs, a.objs[i].X0)
+	}
+	if !slices.Equal(xs, []int{0, 15, 33, 50}) {
+		t.Fatalf("spread across: %v", xs)
+	}
+	if a.objs[0].Y0 != 0 || a.objs[1].Y0 != 5 {
+		t.Fatal("spreading across leaves y alone")
+	}
+	alignWith(a, "ay")
+	// Tops 0, 2, 5, 9 and heights 3: 12 rows, no room left for gaps, so they stack.
+	var ys []int
+	for _, i := range []int{0, 2, 1, 3} {
+		ys = append(ys, a.objs[i].Y0)
+	}
+	if !slices.Equal(ys, []int{0, 3, 6, 9}) {
+		t.Fatalf("spread down: %v", ys)
+	}
+	// Two shapes are not enough.
+	b := boxesAt(t, [4]int{0, 0, 3, 3}, [4]int{9, 0, 3, 3})
+	alignWith(b, "ax")
+	if !b.msgErr {
+		t.Fatal("spreading two shapes should explain")
+	}
+}
+
+func TestAlignGroupsAndArrows(t *testing.T) {
+	// Boxes 1 and 2 are a group; box 3 is alone; an arrow joins 2 and 3.
+	a := boxesAt(t, [4]int{0, 0, 5, 3}, [4]int{10, 4, 5, 3}, [4]int{30, 8, 5, 3})
+	a.objs[0].Group, a.objs[1].Group = 1, 1
+	a.objs = append(a.objs, object{Kind: "arrow", X0: 15, Y0: 5, X1: 29, Y1: 9, ID: 4,
+		From: anchor{ID: 2, Side: 'r', At: 1, Gap: 1}, To: anchor{ID: 3, Side: 'l', At: 1, Gap: 1}})
+	a.reattach(nil)
+	a.selectAll()
+	alignWith(a, "ak")
+	// The group moves as one: its top goes to 0, which it already is. Box 3's top goes to 0.
+	if a.objs[0].Y0 != 0 || a.objs[1].Y0 != 4 || a.objs[2].Y0 != 0 {
+		t.Fatalf("group stays one piece: %+v %+v %+v", a.objs[0], a.objs[1], a.objs[2])
+	}
+	// The arrow follows its boxes instead of being aligned itself.
+	ar := a.objs[3]
+	if ar.From.ID != 2 || ar.To.ID != 3 {
+		t.Fatalf("the arrow stays attached: %+v", ar)
+	}
+	ex, ey := anchorPoint(a.objs[2], ar.To)
+	if ar.X1 != ex || ar.Y1 != ey {
+		t.Fatalf("the arrow's end follows box 3: (%d,%d) want (%d,%d)", ar.X1, ar.Y1, ex, ey)
+	}
+}
+
+func TestLabelPlace(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	a.objs = []object{
+		{Kind: "box", X0: 0, Y0: 0, X1: 19, Y1: 6, Text: []string{"Hi"}, ID: 1},
+		{Kind: "oval", X0: 30, Y0: 0, X1: 55, Y1: 8, Text: []string{"Oval"}, ID: 2},
+		{Kind: "text", X0: 0, Y0: 20, Text: []string{"loose"}, ID: 3},
+	}
+	a.selectAll()
+	typeStr(a, "T")
+	if a.placer == nil {
+		t.Fatal("T opens the label dialog")
+	}
+	a.render()
+	// The arrows move the labels right away.
+	ctrl(a, tcell.KeyUp)
+	ctrl(a, tcell.KeyLeft)
+	if x, y := a.objs[0].labelStart(0); x != 2 || y != 1 {
+		t.Fatalf("box label top left at (%d,%d)", x, y)
+	}
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyRight) // stops at the edge
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	if x, y := a.objs[0].labelStart(0); x != 16 || y != 5 {
+		t.Fatalf("box label bottom right at (%d,%d)", x, y)
+	}
+	// The oval's label stays inside the curve.
+	c := compose(a.objs)
+	x, y := a.objs[1].labelStart(0)
+	for i := range 4 {
+		if c.get(x+i, y) != []rune("Oval")[i] {
+			t.Fatalf("oval label drawn at (%d,%d):\n%s", x, y, a.ascii())
+		}
+	}
+	for xx := x + 4; xx < 56; xx++ {
+		if c.get(xx, y) != ' ' {
+			break
+		}
+		if xx == 55 {
+			t.Fatal("the curve should be to the right of the oval's label")
+		}
+	}
+	// Enter keeps it, in one undo step; loose text is left alone.
+	ctrl(a, tcell.KeyEnter)
+	if a.placer != nil || a.objs[0].HAlign != 1 || a.objs[0].VAlign != 1 || a.objs[1].HAlign != 1 {
+		t.Fatalf("kept: %+v %+v", a.objs[0], a.objs[1])
+	}
+	if a.objs[2].HAlign != 0 {
+		t.Fatal("loose text has no label position")
+	}
+	// Saved by name.
+	data := string(must(encodeYAML(a.objs)))
+	if !strings.Contains(data, "place: bottom right") {
+		t.Fatalf("yaml:\n%s", data)
+	}
+	back, err := decodeYAML([]byte(data))
+	if err != nil || !reflect.DeepEqual(back, a.objs) {
+		t.Fatalf("round trip: %v", err)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[0].HAlign != 0 || a.objs[0].VAlign != 0 {
+		t.Fatal("one undo centers it again")
+	}
+	// A number key picks right away, keypad style; Esc puts it back.
+	a.selectAll()
+	typeStr(a, "T7")
+	if a.placer != nil || a.objs[0].HAlign != -1 || a.objs[0].VAlign != -1 {
+		t.Fatalf("7 is top left: %+v", a.objs[0])
+	}
+	a.selectAll()
+	typeStr(a, "T")
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyEscape)
+	if a.objs[0].VAlign != -1 {
+		t.Fatal("Esc leaves the label where it was")
+	}
+	// A click on a button picks it.
+	a.selectAll()
+	typeStr(a, "T")
+	x0, y0, _, _ := a.placerBox()
+	h, v, ok := a.placeButtonAt(x0+2+placeColW(-1)+1+2, y0+3)
+	if !ok || h != 0 || v != 1 {
+		t.Fatalf("button at bottom center: %d %d %v", h, v, ok)
+	}
+	click(a, x0+2+placeColW(-1)+1+2, y0+3)
+	if a.placer != nil || a.objs[0].HAlign != 0 || a.objs[0].VAlign != 1 {
+		t.Fatalf("click bottom center: %+v", a.objs[0])
+	}
+	// Centered output is unchanged from before, and a file can say it many ways.
+	if strings.Contains(string(must(encodeYAML([]object{{Kind: "box", X1: 9, Y1: 4, Text: []string{"x"}}}))), "place") {
+		t.Fatal("a centered label writes no place")
+	}
+	for _, in := range []string{"top-left", "Left Top", "middle right", "center"} {
+		if _, _, ok := parsePlace(in); !ok {
+			t.Errorf("parsePlace(%q)", in)
+		}
+	}
+	if _, err := decodeYAML([]byte("objects:\n  - kind: box\n    place: sideways\n")); err == nil {
+		t.Fatal("an unknown place is an error")
+	}
+	// Nothing with a label selected explains.
+	a.setSelection([]int{2}, 2)
+	typeStr(a, "T")
+	if a.placer != nil || !a.msgErr {
+		t.Fatal("T on loose text should explain")
+	}
+}
+
+func TestLabelPlaceTooBigStaysCentered(t *testing.T) {
+	// The label fills the box, so bottom right comes out where center does.
+	o := object{Kind: "box", X0: 0, Y0: 0, X1: 5, Y1: 2, Text: []string{"ab"}, HAlign: 1, VAlign: 1}
+	if x, y := o.labelStart(0); x != 2 || y != 1 {
+		t.Fatalf("(%d,%d)", x, y)
+	}
+	// A snug oval: the label is too wide to move sideways, so it doesn't
+	// move up either, where the curve would cut through it.
+	ov := object{Kind: "oval", X0: 0, Y0: 0, X1: 13, Y1: 8, Text: []string{"abcdefgh"}, VAlign: -1}
+	cv := ov
+	cv.VAlign = 0
+	ox, oy := ov.labelStart(0)
+	if cx, cy := cv.labelStart(0); ox != cx || oy != cy {
+		t.Fatalf("snug oval label moved to (%d,%d) from (%d,%d)", ox, oy, cx, cy)
+	}
+}

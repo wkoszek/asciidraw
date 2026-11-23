@@ -75,6 +75,8 @@ type app struct {
 
 	msg       string
 	msgErr    bool
+	placer    *placer  // the T dialog, while it is open; see place.go
+	aligning  bool     // a was pressed: the next key picks how to line up; see align.go
 	confirm   string   // action waiting for a second press: "new" or "quit"
 	mx, my    int      // last mouse position, for the readout
 	swallow   bool     // ignore mouse events until the button is released
@@ -276,6 +278,14 @@ func (a *app) key(ev *tcell.EventKey) bool {
 	}
 	if a.colors != nil {
 		a.pickerKey(ev)
+		return false
+	}
+	if a.placer != nil {
+		a.placerKey(ev)
+		return false
+	}
+	if a.aligning {
+		a.alignKey(ev)
 		return false
 	}
 	pending := a.confirm
@@ -613,6 +623,10 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.help = true
 		case 'C':
 			a.openPicker()
+		case 'a':
+			a.startAlign()
+		case 'T':
+			a.openPlacer()
 		}
 		return
 	}
@@ -712,6 +726,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	sx, sy := ev.Position()
 	b := ev.Buttons()
 	held := b&(tcell.Button1|tcell.Button2) != 0
+	if a.aligning && held { // a click cancels a pending align, and does nothing else
+		a.aligning, a.swallow = false, true
+		a.say("Align cancelled.")
+		return
+	}
 	a.shift = ev.Modifiers()&tcell.ModShift != 0
 
 	// A click that the menu used must not turn into a drag on the canvas.
@@ -732,6 +751,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	}
 	if a.colors != nil {
 		a.pickerMouse(sx, sy, b)
+		a.swallow = held
+		return
+	}
+	if a.placer != nil {
+		a.placerMouse(sx, sy, b)
 		a.swallow = held
 		return
 	}
@@ -1191,6 +1215,8 @@ func (a *app) render() {
 	if a.prompt != nil {
 		end := a.text(1, sh-2, a.prompt.label+string(a.prompt.buf), bar.Bold(true))
 		s.ShowCursor(min(end, sw-1), sh-2)
+	} else if a.aligning {
+		a.text(1, sh-2, alignHelp, bar.Bold(true).Foreground(tcell.ColorYellow))
 	} else {
 		name := a.file
 		if name == "" {
@@ -1235,6 +1261,9 @@ func (a *app) render() {
 	}
 	if a.colors != nil {
 		a.renderPicker()
+	}
+	if a.placer != nil {
+		a.renderPlacer()
 	}
 
 	// Legend: as many items as fit.
