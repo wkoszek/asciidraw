@@ -46,11 +46,33 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           mkdir -p "$GOMODCACHE" "$GOCACHE" "$GOLANGCI_LINT_CACHE"
-          git clone --depth 1 -b "$REF" \
+          # Deep enough to hold every commit of a push, for the message check.
+          git clone --depth 200 -b "$REF" \
             "http://$ACTOR:$TOKEN@gitea:3000/$REPO.git" .
           # Drop the embedded credential so it is not left in .git/config, where
           # the untrusted code this job then builds and runs could read it.
           git remote set-url origin "http://gitea:3000/$REPO.git"
+
+      # Commit subjects decide the next version (scripts/release.sh), so check
+      # every new one. The hook does this locally; this catches clones without it.
+      - name: commit messages
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) from=$BASE ;;
+            push)         from=$BEFORE ;;
+            *)            exit 0 ;;
+          esac
+          if [ -n "$from" ] && git cat-file -e "$from^{commit}" 2>/dev/null; then
+            scripts/release.sh lint "$from..HEAD"
+          else
+            # A new branch, or a base older than the clone: check the tip only.
+            git log -1 --format=%B > /tmp/msg
+            scripts/release.sh lint /tmp/msg
+          fi
 
       - name: gofmt
         run: |

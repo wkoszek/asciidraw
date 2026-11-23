@@ -1,4 +1,4 @@
-.PHONY: all build run test fmt vet check install uninstall clean check-conflicts snapshot release notes help
+.PHONY: all build run test fmt vet check install uninstall clean check-conflicts snapshot rel release notes next changelog hooks help
 
 BINARY_NAME = asciidraw
 GOBIN := $(shell go env GOPATH)/bin
@@ -8,6 +8,8 @@ LDFLAGS := -X main.version=$(VERSION)
 # GitHub token for `make release`: publishes the GitHub release and pushes the
 # cask to wkoszek/homebrew-tap.
 GITHUB_TOKEN_REF = op://infra/github-pat-wkoszek/token
+# Gitea token: asks tig to push the new tag to the GitHub mirror right away.
+GITEA_TOKEN_REF = op://infra/gitea-pat-wkoszek/token
 
 all: check build
 
@@ -58,10 +60,35 @@ clean:
 snapshot: check-conflicts
 	HOMEBREW_TAP_TOKEN=unused MACOS_SIGN=0 goreleaser release --snapshot --clean
 
-## release: publish the tag at HEAD to GitHub Releases and the Homebrew tap
+## hooks: check commit messages in this clone (run once)
+hooks:
+	git config core.hooksPath .githooks
+
+## next: show the next version and the commits that decide it
+next:
+	@scripts/release.sh log
+
+## changelog: draft the next version's CHANGELOG.md section from the commits
+changelog:
+	@scripts/release.sh draft
+
+## rel: the whole release: draft the changelog, edit it, commit, push, publish
+rel:
+	@[ -z "$$(git status --porcelain)" ] || { echo "✗ Commit or stash your changes first."; exit 1; }
+	@if ! git describe --tags --exact-match --match 'v[0-9]*' HEAD >/dev/null 2>&1; then \
+		v=$$(scripts/release.sh next) || exit 1; \
+		if ! grep -q "^## $$v " CHANGELOG.md; then \
+			scripts/release.sh draft && $${EDITOR:-vi} CHANGELOG.md && \
+			git commit -q -m "docs: changelog for $$v" CHANGELOG.md || exit 1; \
+		fi; \
+	fi
+	git push -q tig main
+	@$(MAKE) --no-print-directory release
+
+## release: tag the next version, push the tag, publish everywhere
 release: check
-	@git describe --tags --exact-match >/dev/null 2>&1 || { \
-		echo "✗ HEAD has no tag. Tag it first: git tag -a v0.1.0 -m v0.1.0"; exit 1; }
+	@GITEA_TOKEN_REF=$(GITEA_TOKEN_REF) GITHUB_TOKEN_REF=$(GITHUB_TOKEN_REF) \
+		scripts/release.sh tag
 	@$(MAKE) --no-print-directory notes
 	@token=$$(opc read -n $(GITHUB_TOKEN_REF)) && \
 		GITHUB_TOKEN=$$token HOMEBREW_TAP_TOKEN=$$token \

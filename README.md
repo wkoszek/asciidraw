@@ -698,20 +698,63 @@ Application certificate in the keychain and a notarytool profile;
 `scripts/macos-sign.sh` shows how to make the profile. It also needs a GitHub
 token in 1Password at `op://infra/github-pat-wkoszek/token`. The token
 must be able to publish releases on `wkoszek/asciidraw` and push to
-`wkoszek/homebrew-tap`.
+`wkoszek/homebrew-tap`. Last, it needs a tig token at
+`op://infra/gitea-pat-wkoszek/token`, to tell tig to update the GitHub
+mirror.
 
-Write the new version's section in `CHANGELOG.md` first. `make release`
-uses that section as the release notes and stops if there isn't one. Then
-tag the commit, push the tag to tig (the mirror copies it to GitHub), and run
-`make release`:
+Commit subjects follow [Conventional Commits](https://www.conventionalcommits.org).
+The commits since the last tag set the next version, and the biggest bump
+wins:
+
+| Subject | Version | Example |
+| --- | --- | --- |
+| `fix:` or `perf:` | patch | v1.2.3 to v1.2.4 |
+| `feat:` | minor | v1.2.3 to v1.3.0 |
+| any type with `!`, as in `feat!:` | major | v1.2.3 to v2.0.0 |
+
+A line in the message body that starts with `BREAKING CHANGE:` also makes a
+major bump. Before v1.0.0, a breaking change bumps the minor version instead.
+The other types (`docs`, `test`, `refactor`, `build`, `ci`, `chore`, `style`
+and `revert`) make no release unless they break something. A scope is
+optional, as in `fix(clipboard): keep tabs when pasting`. Keep subjects to 72
+characters or fewer.
+
+Run `make hooks` once in each clone. Then git rejects a commit whose subject
+breaks these rules. It lets through the subjects git writes itself, the ones
+that start with `Merge`, `Revert "`, `fixup!`, `squash!` or `amend!`. CI checks
+the commits in each push or pull request to `main` the same way. When it
+can't find where a push started, it checks only the newest commit.
+
+To release, run `make rel`. It drafts the new version's section of
+`CHANGELOG.md` from the commits and opens it in `$EDITOR`. Turn the draft
+into plain sentences and save. `make rel` commits the section, pushes `main`
+to tig, and runs `make release`. `make next` shows the version ahead of time.
+
+The same steps, one at a time:
 
 ```sh
-git tag -a v0.1.0 -m v0.1.0
-git push tig main v0.1.0
+make next       # the next version, and the commits behind it
+make changelog  # draft its CHANGELOG.md section from those commits
+                # edit the draft into plain sentences, then commit it
+git push tig main
 make release
 ```
 
-`make release` runs `make check`, then hands off to GoReleaser. GoReleaser
+`make release` first runs `make check`. Then it tags HEAD with the next
+version and pushes the tag to tig. It asks tig to update the GitHub mirror,
+and waits up to two minutes for the tag to show up there. Before it tags, it
+stops unless:
+
+- you're on `main` and have no uncommitted changes,
+- HEAD is the same commit as tig's `main`, and
+- `CHANGELOG.md` has a section for the new version.
+
+When some commits since the last tag don't follow the format, pick the bump
+yourself: `BUMP=minor make rel`. If a release fails after the tag is made,
+run `make rel` again. It reuses the tag on HEAD.
+
+Next, `make release` copies that version's section of `CHANGELOG.md` into
+`build/notes.md` and hands off to GoReleaser. GoReleaser
 builds the archives and Linux packages. It signs the macOS binary and has
 Apple notarize it. Last, it publishes the GitHub release and updates the cask
 in the Homebrew tap. The settings are in `.goreleaser.yaml`.
