@@ -32,3 +32,10 @@
 !/CHANGELOG.md
 !/todo.md
 /*.txt
+# Exports of those drawings
+/*.png
+/*.jpg
+/*.jpeg
+/*.svg
+/*.html
+/*.htm
