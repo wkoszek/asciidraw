@@ -49,6 +49,8 @@ type app struct {
 	s      tcell.Screen
 	objs   []object
 	pal    []string // the color panel's 16 palette slots, saved with the drawing
+	pages  []page   // every page; the one on screen is in objs, undo and redo
+	page   int      // the page on screen
 	undo   [][]object
 	redo   [][]object
 	file   string
@@ -94,7 +96,7 @@ type app struct {
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, pal: slices.Clone(defaultPal), sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true}
+	return &app{s: s, pal: slices.Clone(defaultPal), pages: []page{{}}, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true}
 }
 
 func (a *app) reset() {
@@ -169,6 +171,15 @@ func (a *app) remove(i int) {
 
 func (a *app) ascii() string { return compose(a.objs).String() }
 
+// pictures gives every page as text, for the export.
+func (a *app) pictures() []string {
+	var out []string
+	for _, objs := range trimPages(a.allPages()) {
+		out = append(out, compose(objs).String())
+	}
+	return out
+}
+
 // ---- saving ----
 
 func expandHome(p string) string {
@@ -222,7 +233,7 @@ func (a *app) unlessExists(path string, done func(string)) {
 
 func (a *app) write(path string) {
 	a.stopTyping()
-	if err := saveYAML(path, a.objs, a.pal); err != nil {
+	if err := saveYAML(path, a.allPages(), a.pal); err != nil {
 		a.sayErr("Save failed: " + err.Error())
 		return
 	}
@@ -232,7 +243,11 @@ func (a *app) write(path string) {
 	clearRecovery(a.file) // saved: no recovery copy needed, old name or new
 	clearRecovery(path)
 	a.file, a.dirty, a.suggest = path, false, ""
-	a.say(fmt.Sprintf("Saved %s (%d objects)", path, len(a.objs)))
+	if n := len(trimPages(a.allPages())); n > 1 {
+		a.say(fmt.Sprintf("Saved %s (%d pages)", path, n))
+	} else {
+		a.say(fmt.Sprintf("Saved %s (%d objects)", path, len(a.objs)))
+	}
 }
 
 // export writes the picture as Markdown: next to the YAML file if there is
@@ -251,13 +266,17 @@ func (a *app) export() {
 
 func (a *app) writeMD(path string) {
 	a.stopTyping()
-	pic := a.ascii()
-	if err := os.WriteFile(path, []byte(markdown(pic)), 0o644); err != nil {
+	pics := a.pictures()
+	if err := os.WriteFile(path, []byte(markdownPages(pics)), 0o644); err != nil {
 		a.sayErr("Export failed: " + err.Error())
 		return
 	}
 	a.exported = path
-	a.say(fmt.Sprintf("Exported %s (%d lines)", path, strings.Count(pic, "\n")))
+	if len(pics) > 1 {
+		a.say(fmt.Sprintf("Exported %s (%d pages)", path, len(pics)))
+	} else {
+		a.say(fmt.Sprintf("Exported %s (%d lines)", path, strings.Count(pics[0], "\n")))
+	}
 }
 
 // ---- keyboard ----
@@ -627,6 +646,12 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.startAlign()
 		case 'T':
 			a.openPlacer()
+		case '>', '.':
+			a.nextPage()
+		case '<', ',':
+			a.prevPage()
+		case '+':
+			a.clonePage()
 		}
 		return
 	}
@@ -824,6 +849,9 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 			}
 		}
 	case sy >= h: // status bar or legend
+		if n := a.pagerAt(sx, sy); n >= 0 && b&tcell.Button1 != 0 {
+			a.pickPage(n)
+		}
 		a.swallow = true
 	default:
 		a.mx, a.my = x, y
@@ -1276,9 +1304,11 @@ func (a *app) render() {
 		{"^E", "export .md"}, {"^C/^V", "copy/paste"}, {"^N", "new"}, {"^Q", "quit"},
 		{"^Z/^Y", "undo/redo"}, {"^O", "objects"},
 	}
+	right := sw - a.pagerWidth()
+	a.renderPager(sh-1, leg)
 	x := 1
 	for _, it := range items {
-		if x+len([]rune(it[0]+it[1]))+1 > sw {
+		if x+len([]rune(it[0]+it[1]))+1 > right {
 			break
 		}
 		x = a.text(x, sh-1, it[0], leg.Bold(true))
@@ -1289,7 +1319,7 @@ func (a *app) render() {
 }
 
 func main() {
-	var objs []object
+	var objs [][]object
 	var pal []string
 	file, suggest, note := "", "", ""
 	if len(os.Args) > 1 {
@@ -1342,7 +1372,8 @@ func main() {
 	}()
 
 	a := newApp(s)
-	a.objs, a.file, a.suggest = objs, file, suggest
+	a.setPages(objs)
+	a.file, a.suggest = file, suggest
 	if pal != nil {
 		a.pal = pal
 	}

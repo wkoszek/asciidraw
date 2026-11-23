@@ -11,6 +11,18 @@ before you tag.
 - `T` places the label in a box or an oval in one of nine spots, such as
   top left or bottom right. The drawing file stores any spot but center as
   `place`.
+- Pages. `>` and `<` move between them, and so do `.` and `,`. `>` on
+  the last page starts a new one, unless the last page is empty. `+`
+  copies a page to a new page after it. Each page has its own undo.
+- Pages are named `0`-`9`, `a`-`z`, `A`-`Z`, so a drawing holds up to 62.
+  The bottom right corner shows five names at a time and marks the current
+  one. Click a name to go to that page.
+- ^E exports each page in its own code block, leaving out empty pages at
+  the end.
+- The drawing file is now a list of pages (`version: 2`). Older files open
+  as one page. v0.1.0 doesn't check the version, so it opens a version 2
+  file as an empty drawing; don't save over the file from v0.1.0. From now
+  on, asciidraw refuses a file newer than the version it knows.
 
 ## v0.1.0 (2026-11-22)
 

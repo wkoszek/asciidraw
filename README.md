@@ -493,6 +493,8 @@ When you are not typing, these letters work as commands:
 | `C` (Shift-c) | set the text and background colors of the selected shapes | |
 | `T` (Shift-t) | choose where the label sits in a box or an oval | |
 | `a` | align or spread out the selected shapes, then press a second key (see Align and spread out) | |
+| `>` / `<` | go to the next page / the page before (see Pages) | `.` / `,` |
+| `+` | copy this page to a new page after it, and go there | |
 
 They come from vim. Press Esc first if you are typing.
 
@@ -518,6 +520,48 @@ last copied in asciidraw.
 
 If you have unsaved changes, ^N and ^Q warn you. Press the key again to go
 ahead.
+
+## Pages
+
+A drawing can have several pages, such as one screen of an app per page.
+A new drawing has one page.
+
+- **`>`** goes to the next page. On the last page, it adds a new, empty
+  page. If the last page is already empty, nothing happens.
+- **`<`** goes back one page.
+- **`+`** copies the page you're on to a new page right after it, and takes
+  you there. Use it to draw the next state of a screen without starting
+  over. ^Z can't undo `+`.
+
+`.` and `,` do the same as `>` and `<`, so you don't need Shift. These
+keys work with or without a selection. If you're typing in a shape, press
+Esc first.
+
+Each page has a one-character name. The first ten are `0` to `9`, the
+next 26 are `a` to `z`, and the last 26 are `A` to `Z`. That makes 62
+pages at most. Once you have 62, `>` and `+` can't add another; the
+status line says so.
+
+The bottom right corner shows five names at a time, as in `Pages:01234`.
+The page you're on is yellow, and names of pages you haven't made yet are
+dim. As you move, the names slide along and the page you're on stays in
+view. Click a bright name to go to that page.
+
+Each page has its own shapes and its own undo: ^Z only undoes changes on
+the page you're on. To copy shapes to another page, select them, press
+`y`, go to that page, and press `p`.
+
+When you leave an empty last page for an earlier one, asciidraw drops it.
+It keeps the page if you drew there and erased, so ^Z and ^Y still work.
+Saving leaves out empty pages at the end too.
+
+You can't delete a page in the middle yet. To clear a page, press ^A, then
+`x`. The empty page stays.
+
+^E exports each page in its own code block. Above each block it writes
+`Page` and the page's name, such as `Page 2` for the page named `2`. Empty
+pages at the end are left out. A drawing with one page exports as one
+code block, with no `Page` line.
 
 ## Scrolling
 
@@ -554,34 +598,49 @@ write it wins.
 
 ## Files
 
-**^S** saves the drawing as YAML, one entry per shape. Coordinates are
-columns and rows, counted from 0 at the top left. Styles are stored by name,
-so the file is easy to edit by hand:
+**^S** saves the drawing as YAML: a list of pages, each with one entry per
+shape. Coordinates are columns and rows, counted from 0 at the top left.
+Styles are stored by name, so the file is easy to edit by hand:
 
 ```yaml
-version: 1
-objects:
-  - kind: box
-    style: round
-    x0: 2
-    y0: 1
-    x1: 24
-    y1: 6
-    text:
-      - Login
-    id: 1
-  - kind: text
-    x0: 4
-    y0: 8
-    text:
-      - Forgot password?
-    id: 2
+version: 2
+pages:
+  - objects:
+      - kind: box
+        style: round
+        x0: 2
+        y0: 1
+        x1: 24
+        y1: 6
+        text:
+          - Login
+        id: 1
+      - kind: text
+        x0: 4
+        y0: 8
+        text:
+          - Forgot password?
+        id: 2
+  - objects:
+      - kind: box
+        x0: 2
+        y0: 1
+        x1: 24
+        y1: 6
+        id: 1
 ```
 
-The box's `text` is its label. The second entry is text on its own. The
-`id` names a shape, so that lines can say what they are attached to.
+This drawing has two pages. On the first page, the box's `text` is its
+label, and the second entry is text on its own. The second page has a box
+with no `style`, so it uses the first style, ascii. The `id` names a
+shape, so that lines can say what they are attached to. Ids only need to
+be different within one page, so two pages can use the same ids.
 
-**^E** writes the picture inside a code block. For `mock.yaml` it writes
+Files saved before pages existed say `version: 1` and have an `objects`
+list and no `pages`. They open as one page. The next save turns them into
+`version: 2`.
+
+**^E** writes the pictures inside code blocks, one per page. For `mock.yaml` it writes
 `mock.md` in the same folder. If the drawing has no name yet, it asks for
 one.
 

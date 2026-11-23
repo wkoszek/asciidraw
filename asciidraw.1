@@ -171,12 +171,45 @@ Check or uncheck a checkbox or radio button, or make the next tab active.
 On a progress bar or a scrollbar, add 10; after 100 it goes back to 0.
 On a fill, go to the next of its eight shades.
 .El
+.Ss Pages
+Each page has a one-character name:
+.Ql 0
+to
+.Ql 9 ,
+then
+.Ql a
+to
+.Ql z ,
+then
+.Ql A
+to
+.Ql Z ,
+for 62 pages at most.
+The bottom right corner shows five names at a time.
+The current page is yellow.
+Names of pages not made yet are dim, so you can see where the next page
+will go.
+As you move, the names slide along.
+Click a bright name to go to that page.
+Each page has its own undo.
+.Pp
+These keys work with or without a selection.
+.Bl -tag -width "> or \&. (period)"
+.It > or \&. (period)
+Go to the next page.
+On the last page, start a new, empty page, unless the last page is
+already empty.
+.It < or \&, (comma)
+Go to the page before.
+.It +
+Copy the current page to a new page after it, and go to the copy.
+.El
 .Ss Files and view
 .Bl -tag -width "PgUp, PgDn"
 .It ^S
 Save the drawing as YAML.
 .It ^E
-Export the picture inside a Markdown code block.
+Export the picture inside a Markdown code block, one block per page.
 For
 .Pa mock.yaml
 it writes

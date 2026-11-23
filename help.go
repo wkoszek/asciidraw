@@ -40,12 +40,14 @@ var helpRight = []string{
 	"  y d p x        copy/cut/paste/del",
 	"  ^D             duplicate",
 	"  ]  [           front, back",
-	"  t              next style",
-	"  C              colors",
-	"  a              align, spread out",
-	"  T              label position",
+	"  t  T           style, label spot",
+	"  C  a           colors, align",
 	"  Enter          edit label or text",
 	"  Space          toggle, next shade",
+	"",
+	"Pages",
+	"  > .  / < ,     next / previous page",
+	"  +              copy this page",
 }
 
 func (a *app) renderHelp() {

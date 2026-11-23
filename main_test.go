@@ -83,9 +83,9 @@ func TestDrawTypeSave(t *testing.T) {
 	}
 
 	// The YAML brings the objects back.
-	objs, _, saveTo, note, err := loadDrawing(a.file)
-	if err != nil || note != "" || saveTo != a.file || !reflect.DeepEqual(objs, a.objs) {
-		t.Fatalf("reload: err=%v note=%q objs=%+v", err, note, objs)
+	pages, _, saveTo, note, err := loadDrawing(a.file)
+	if err != nil || note != "" || saveTo != a.file || len(pages) != 1 || !reflect.DeepEqual(pages[0], a.objs) {
+		t.Fatalf("reload: err=%v note=%q pages=%+v", err, note, pages)
 	}
 
 	// ^E writes mock.md next to it, no questions asked.
@@ -138,7 +138,8 @@ func TestImport(t *testing.T) {
 	dir := t.TempDir()
 	md := filepath.Join(dir, "ui.md")
 	os.WriteFile(md, []byte("# Title\n\n````text\n+--+\n|ok|\n+--+\n````\nafter\n"), 0o644)
-	objs, _, saveTo, note, err := loadDrawing(md)
+	pages, _, saveTo, note, err := loadDrawing(md)
+	objs := pages[0]
 	if err != nil || saveTo != "" || note == "" {
 		t.Fatalf("err=%v saveTo=%q note=%q", err, saveTo, note)
 	}
@@ -1869,7 +1870,7 @@ func TestPalette(t *testing.T) {
 	}
 
 	// Saved with the drawing, and only when it isn't the default.
-	data := string(must(encodeDoc(a.objs, a.pal)))
+	data := string(must(encodeDoc([][]object{a.objs}, a.pal)))
 	if !strings.Contains(data, "palette:") || !strings.Contains(data, "#3b82f6") {
 		t.Fatalf("yaml:\n%s", data)
 	}
@@ -1877,7 +1878,7 @@ func TestPalette(t *testing.T) {
 	if err != nil || !slices.Equal(pal, a.pal) {
 		t.Fatalf("round trip: %v %v", err, pal)
 	}
-	if strings.Contains(string(must(encodeDoc(a.objs, defaultPal))), "palette") {
+	if strings.Contains(string(must(encodeDoc([][]object{a.objs}, defaultPal))), "palette") {
 		t.Fatal("the default palette isn't written")
 	}
 	_, pal, err = decodeDoc([]byte("palette: ['#F80', red]\nobjects: []\n"))
@@ -2176,4 +2177,226 @@ func TestLabelPlaceTooBigStaysCentered(t *testing.T) {
 	if cx, cy := cv.labelStart(0); ox != cx || oy != cy {
 		t.Fatalf("snug oval label moved to (%d,%d) from (%d,%d)", ox, oy, cx, cy)
 	}
+}
+
+// The ruler in the bottom right names each page with one character and
+// marks the one on screen. A click on a name goes to that page.
+func TestPager(t *testing.T) {
+	a := testApp(t)
+	sw, sh := a.s.Size()
+	lastRow := func() string { a.render(); return strings.Split(screenText(a), "\n")[sh-1] }
+	ruler := func() string { return strings.TrimRight(lastRow(), " ") }
+	// The ruler is always five names wide; pages not made yet are dim.
+	if !strings.HasSuffix(ruler(), "Pages:01234") {
+		t.Fatalf("a new drawing: %q", ruler())
+	}
+	x0, _ := a.pager()
+	style := func(i int) tcell.Style { _, _, st, _ := a.s.GetContent(x0+i, sh-1); return st }
+	if style(0) != style(0).Background(tcell.ColorYellow) || style(1) != style(1).Dim(true) {
+		t.Fatal("page 0 is marked, page 1 doesn't exist yet")
+	}
+	drag2(a, 0, 0, 10, 4)
+	ctrl(a, tcell.KeyEscape)
+	typeStr(a, "+>") // copy to page 1, then > adds an empty page 2
+	if a.page != 2 || len(a.pages) != 3 || len(a.objs) != 0 {
+		t.Fatalf("+ then >: page=%d pages=%d objs=%d", a.page, len(a.pages), len(a.objs))
+	}
+	if !strings.HasSuffix(ruler(), "Pages:01234") || style(2) != style(2).Background(tcell.ColorYellow) || style(1).Dim(true) == style(1) {
+		t.Fatalf("three pages, on page 2: %q", ruler())
+	}
+	if strings.Contains(lastRow(), "^O") && sw < 50 {
+		t.Fatal("legend items make room for the ruler")
+	}
+	press(a, x0+4, sh-1, tcell.Button1) // page 4 doesn't exist
+	press(a, x0+4, sh-1, 0)
+	if a.page != 2 {
+		t.Fatal("a click on a page not made yet does nothing")
+	}
+	press(a, x0, sh-1, tcell.Button1)
+	press(a, x0, sh-1, 0)
+	if a.page != 0 {
+		t.Fatalf("click on 0 goes to page 0, got %d", a.page)
+	}
+
+	// 62 pages, 0 to Z, and no more. The names slide; the width stays.
+	pp := make([][]object, maxPages)
+	for i := range pp {
+		pp[i] = cloneObjs(a.objs)
+	}
+	a.setPages(pp)
+	a.gotoPage(20)
+	if !strings.HasSuffix(ruler(), "Pages:ijklm") {
+		t.Fatalf("page k sits in the middle: %q", ruler())
+	}
+	a.gotoPage(maxPages - 1)
+	if !strings.HasSuffix(ruler(), "Pages:VWXYZ") {
+		t.Fatalf("last page: %q", ruler())
+	}
+	typeStr(a, ".")
+	if !a.msgErr || len(a.pages) != maxPages {
+		t.Fatal(". stops at 62 pages")
+	}
+	typeStr(a, "+")
+	if !a.msgErr || len(a.pages) != maxPages {
+		t.Fatal("+ stops at 62 pages")
+	}
+	if a.pageName() != "page Z" {
+		t.Fatalf("last page is Z: %s", a.pageName())
+	}
+	if _, _, err := decodeDoc([]byte("version: 3\n")); err == nil || !strings.Contains(err.Error(), "newer") {
+		t.Fatal("a file from a newer asciidraw is refused")
+	}
+	big := "version: 2\npages:\n" + strings.Repeat("  - objects: []\n", maxPages+1)
+	if _, _, err := decodeDoc([]byte(big)); err == nil {
+		t.Fatal("a file with 63 pages is refused")
+	}
+}
+
+func TestPages(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	typeStr(a, ".")
+	if !a.msgErr || len(a.pages) != 1 {
+		t.Fatal("no new page after an empty one")
+	}
+	typeStr(a, ",")
+	if !a.msgErr {
+		t.Fatal(", on the first page explains")
+	}
+	drag2(a, 0, 0, 10, 4) // page 1: a box
+	ctrl(a, tcell.KeyEscape)
+	typeStr(a, ".")
+	if a.page != 1 || len(a.pages) != 2 || len(a.objs) != 0 {
+		t.Fatalf("., starts an empty page 2: page=%d pages=%d objs=%d", a.page, len(a.pages), len(a.objs))
+	}
+	a.render()
+	if !strings.Contains(screenText(a), "Pages:01") {
+		t.Fatal("the ruler shows the pages")
+	}
+	// Going back from an untouched empty page drops it.
+	typeStr(a, ",")
+	if a.page != 0 || len(a.pages) != 1 || len(a.objs) != 1 {
+		t.Fatalf("back: page=%d pages=%d", a.page, len(a.pages))
+	}
+	// One you drew on and undid keeps its redo.
+	typeStr(a, ".")
+	drag2(a, 20, 0, 30, 4)
+	ctrl(a, tcell.KeyCtrlZ)
+	typeStr(a, ",.")
+	ctrl(a, tcell.KeyCtrlY)
+	if a.page != 1 || len(a.objs) != 1 {
+		t.Fatalf("redo survives leaving the page: page=%d objs=%d", a.page, len(a.objs))
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	a.redo = nil
+	typeStr(a, ",")
+	typeStr(a, ".")
+	drag2(a, 20, 0, 30, 4) // page 2: a box of its own
+	drag2(a, 40, 0, 50, 4)
+	ctrl(a, tcell.KeyEscape)
+	// Undo belongs to the page: on page 1 it can't touch page 2.
+	typeStr(a, ",")
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 0 || len(a.pages[1].objs) != 2 {
+		t.Fatalf("undo on page 1: %d here, %d on page 2", len(a.objs), len(a.pages[1].objs))
+	}
+	ctrl(a, tcell.KeyCtrlY)
+	typeStr(a, ".")
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 1 {
+		t.Fatalf("page 2 keeps its own undo: %d", len(a.objs))
+	}
+	ctrl(a, tcell.KeyCtrlY)
+
+	// + copies page 2 to a new page 3, and the copy is separate.
+	typeStr(a, "+")
+	if a.page != 2 || len(a.pages) != 3 || len(a.objs) != 2 || !a.dirty {
+		t.Fatalf("clone: page=%d pages=%d objs=%d", a.page, len(a.pages), len(a.objs))
+	}
+	a.objs[0].move(1, 0)
+	if a.pages[1].objs[0].X0 != 20 {
+		t.Fatal("changing the copy leaves the original alone")
+	}
+	// < goes back like ,.
+	typeStr(a, "<")
+	if a.page != 1 {
+		t.Fatal("< goes back")
+	}
+	// > goes forward like .
+	typeStr(a, ">")
+	if a.page != 2 || len(a.pages) != 3 {
+		t.Fatal("> goes to the next page")
+	}
+	typeStr(a, "<")
+	// + in the middle inserts right after, and the rest move down.
+	typeStr(a, ",+")
+	if a.page != 1 || len(a.pages) != 4 || len(a.objs) != 1 || len(a.pages[2].objs) != 2 {
+		t.Fatalf("clone page 1: page=%d pages=%d", a.page, len(a.pages))
+	}
+
+	// Saved as a list of pages; an empty page at the end is left out.
+	a.pages = append(a.pages, page{})
+	data := string(must(encodeDoc(a.allPages(), a.pal)))
+	if !strings.Contains(data, "pages:") || strings.Count(data, "- objects:") != 4 || !strings.Contains(data, "version: 2") {
+		t.Fatalf("yaml:\n%s", data)
+	}
+	pages, _, err := decodeDoc([]byte(data))
+	if err != nil || len(pages) != 4 || !reflect.DeepEqual(pages[3], a.allPages()[3]) {
+		t.Fatalf("round trip: %v %d", err, len(pages))
+	}
+	// A version 1 file, with a bare objects list, is one page.
+	pages, _, err = decodeDoc([]byte("version: 1\nobjects:\n  - kind: box\n    x1: 4\n    y1: 2\n"))
+	if err != nil || len(pages) != 1 || len(pages[0]) != 1 {
+		t.Fatalf("old file: %v %v", err, pages)
+	}
+	if _, _, err := decodeDoc([]byte("objects:\n  - kind: box\npages:\n  - objects: []\n")); err == nil {
+		t.Fatal("both pages and objects is an error")
+	}
+	if _, _, err := decodeDoc([]byte("pages:\n  - objects: []\n  - objects:\n      - kind: blob\n")); err == nil || !strings.Contains(err.Error(), "page 1:") {
+		t.Fatalf("an error names its page: %v", err)
+	}
+	// A new drawing has one page, and saving it writes pages[0].
+	data = string(must(encodeYAML([]object{{Kind: "box", X1: 4, Y1: 2}})))
+	if !strings.Contains(data, "pages:\n  - objects:\n      - kind: box") {
+		t.Fatalf("one page:\n%s", data)
+	}
+
+	// The export has every page, each in its own block.
+	md := markdownPages(a.pictures())
+	if strings.Count(md, "```text") != 4 || !strings.Contains(md, "Page 3\n") {
+		t.Fatalf("export:\n%s", md)
+	}
+	if strings.Contains(markdownPages([]string{"x\n"}), "Page") {
+		t.Fatal("a single page exports without a Page line")
+	}
+
+	// Save and reopen: all pages come back, starting on the first.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "p.yaml")
+	a.write(path)
+	b := testAppSized(t, 100, 30)
+	pp, _, _, _, err := loadDrawing(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.setPages(pp)
+	if len(b.pages) != 4 || b.page != 0 || len(b.objs) != 1 {
+		t.Fatalf("reopen: %d pages, page %d, %d objs", len(b.pages), b.page, len(b.objs))
+	}
+}
+
+func screenText(a *app) string {
+	s := a.s.(tcell.SimulationScreen)
+	cells, w, h := s.GetContents()
+	var b strings.Builder
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if r := cells[y*w+x].Runes; len(r) > 0 {
+				b.WriteRune(r[0])
+			} else {
+				b.WriteRune(' ')
+			}
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
