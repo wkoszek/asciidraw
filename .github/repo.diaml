@@ -4,7 +4,7 @@ description: >
   A terminal program for drawing ASCII mockups with the mouse: boxes, ovals,
   lines, arrows and text as objects you can select, move, resize, copy and
   paste. Saves drawings as YAML and exports them as Markdown.
-visibility: private
+visibility: public
 language: go
 tags:
   - cli
