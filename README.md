@@ -150,6 +150,48 @@ A new widget uses the style picked in the menu, and keeps it. In the ascii
 style it uses only plain characters, such as `#` and `.` for a progress bar.
 Widgets export to Markdown like everything else.
 
+## The library
+
+**L** (Shift-l) opens the library of ready-made pieces. If you're typing
+text, press Esc first. The window has two tabs, `[ builtin | custom ]`.
+Left and right switch tabs, and up and down pick a piece. The right side
+shows a preview. Esc closes the window.
+
+Enter drops the piece where the mouse last was on the drawing, before
+you opened the library. The piece stays selected as one group, so you
+can drag it into place. ^Z takes it back out. With the mouse, click a
+name to pick it, and click it a second time to add it.
+
+The builtin tab has pieces for web apps:
+
+- a login dialog
+- a register dialog
+- an empty browser window with an address bar
+- a web app with four panes: a sidebar, a list, the content and a right
+  sidebar
+- an open file dialog
+
+The custom tab shows your own pieces, from `~/.config/asciidraw/library/`
+(or `$XDG_CONFIG_HOME/asciidraw/library/` if you set that). asciidraw
+makes the folder the first time you press L. Each file is one piece:
+
+- An `.adraw` file is a drawing, the same YAML that ^S saves. Only
+  its first page is used. `.yaml` files work too.
+- A `.txt` file becomes one text shape, with the whole file in it.
+- An `.md` file becomes one text shape too. It holds the first code block
+  fenced with backticks, or the whole file if there is no such block.
+
+A file asciidraw can't read stays in the list, and the preview says why.
+The library reads the folder each time you press L, so new files show up
+without a restart.
+
+To make a piece, draw it, press ^S and save it into that folder,
+such as `~/.config/asciidraw/library/card.adraw`. The list shows the file
+name with dashes turned into spaces. Pieces are listed in file name
+order, so a number and a dash in front set the order: `1-card.adraw`
+shows as `card`. Pad numbers with zeros past nine, as in `01-card.adraw`,
+since `10-` sorts before `2-`.
+
 ## Changing shapes
 
 - **Click** a shape to select it. Click selected text again to type in it.
@@ -510,6 +552,7 @@ last copied in asciidraw.
 | ^S | save |
 | ^E | export (see Export) |
 | S (Shift-s) | export settings: formats, font size, theme, pages |
+| L (Shift-l) | open the library of ready-made pieces |
 | ^N | new drawing |
 | ^Z / ^Y | undo / redo |
 | ^T | tools and styles |

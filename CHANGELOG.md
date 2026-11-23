@@ -19,6 +19,13 @@ before you tag.
   one. Click a name to go to that page.
 - ^E exports each page in its own code block, leaving out empty pages at
   the end.
+- `L` opens a library of ready-made pieces, in two tabs. The builtin tab
+  has a login dialog, a register dialog, a browser window, a four-pane web
+  app and an open file dialog. The custom tab reads `.adraw`, `.yaml`,
+  `.md` and `.txt` files from `~/.config/asciidraw/library/`, or from
+  `$XDG_CONFIG_HOME/asciidraw/library/` if that is set.
+- asciidraw now opens and saves `.adraw` files. They hold the same YAML
+  as `.yaml` files.
 - PNG and JPEG export. `S` opens the export settings. There you pick the
   formats ^E writes and the font size for images, 12px by default.
 - The settings also pick a light or dark theme for images, and one file

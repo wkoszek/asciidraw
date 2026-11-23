@@ -3,8 +3,10 @@
 *.test
 *.out
 
-# Object files from early versions
+# Object files from early versions, and drawings saved as .adraw. The
+# built-in library pieces are the exception: they are compiled in.
 *.adraw
+!/library/*.adraw
 
 # Syncthing
 .stfolder

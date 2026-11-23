@@ -1,0 +1,87 @@
+# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export.
+version: 2
+pages:
+  - objects:
+      - kind: box
+        style: line
+        x0: 0
+        y0: 0
+        x1: 79
+        y1: 2
+      - kind: text
+        x0: 2
+        y0: 1
+        text:
+          - AppName
+      - kind: input
+        style: line
+        x0: 50
+        y0: 1
+        x1: 77
+        y1: 1
+        text:
+          - Search
+      - kind: box
+        style: line
+        x0: 0
+        y0: 2
+        x1: 15
+        y1: 23
+      - kind: text
+        x0: 2
+        y0: 3
+        text:
+          - Inbox
+          - Starred
+          - Sent
+          - Drafts
+          - ""
+          - Labels
+          - '  Work'
+          - '  Home'
+      - kind: box
+        style: line
+        x0: 15
+        y0: 2
+        x1: 37
+        y1: 23
+      - kind: text
+        x0: 17
+        y0: 3
+        text:
+          - Item one
+          - Short summary
+          - ""
+          - Item two
+          - Short summary
+          - ""
+          - Item three
+          - Short summary
+      - kind: box
+        style: line
+        x0: 37
+        y0: 2
+        x1: 63
+        y1: 23
+      - kind: text
+        x0: 39
+        y0: 3
+        text:
+          - Title
+          - ""
+          - Content goes here.
+      - kind: box
+        style: line
+        x0: 63
+        y0: 2
+        x1: 79
+        y1: 23
+      - kind: text
+        x0: 65
+        y0: 3
+        text:
+          - Details
+          - ""
+          - Owner
+          - Updated
+          - Tags

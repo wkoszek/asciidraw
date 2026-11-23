@@ -2556,3 +2556,106 @@ func TestImageLinesMeet(t *testing.T) {
 		}
 	}
 }
+
+// L opens the library: built-in pieces and the user's own from
+// ~/.config/asciidraw/library. Enter adds the piece at the mouse.
+func TestLibrary(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	b := builtinItems()
+	var names []string
+	for _, it := range b {
+		if it.err != nil || len(it.objs) == 0 {
+			t.Fatalf("builtin %s: %v", it.name, it.err)
+		}
+		names = append(names, it.name)
+	}
+	want := []string{"login dialog", "register dialog", "browser window", "webapp 4 panes", "open file dialog"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("builtin pieces: %q", names)
+	}
+
+	a := testAppSized(t, 100, 30)
+	a.mx, a.my = 5, 3
+	typeStr(a, "L")
+	if a.library == nil {
+		t.Fatal("L opens the library")
+	}
+	a.render()
+	if !strings.Contains(screenText(a), "[ builtin | custom ]") || !strings.Contains(screenText(a), "Sign in") {
+		t.Fatal("tabs and a preview of the login dialog")
+	}
+	ctrl(a, tcell.KeyEnter)
+	if a.library != nil || len(a.objs) != len(b[0].objs) {
+		t.Fatalf("Enter adds the piece: %d objects", len(a.objs))
+	}
+	x, y, _, _ := selBounds(a.objs, a.selected())
+	if x != 5 || y != 3 || len(a.selected()) != len(a.objs) || a.objs[0].Group == 0 {
+		t.Fatalf("at the mouse, selected, grouped: %d,%d", x, y)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if len(a.objs) != 0 {
+		t.Fatal("one undo takes it back out")
+	}
+	// The mouse: the first click picks a name, even the one already
+	// picked; a second click on it adds it.
+	typeStr(a, "L")
+	if _, err := os.Stat(filepath.Join(dir, "asciidraw", "library")); err != nil {
+		t.Fatal("opening the library makes the custom folder")
+	}
+	lx, ly, _, _ := a.libraryBox()
+	press(a, lx+4, ly+3, tcell.Button1)
+	press(a, lx+4, ly+3, 0)
+	if a.library == nil || len(a.objs) != 0 {
+		t.Fatal("one click only picks")
+	}
+	press(a, lx+4, ly+4, tcell.Button1)
+	press(a, lx+4, ly+4, 0)
+	press(a, lx+4, ly+4, tcell.Button1)
+	press(a, lx+4, ly+4, 0)
+	if a.library != nil || len(a.objs) != len(b[1].objs) {
+		t.Fatalf("two clicks on register add it: %d", len(a.objs))
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+
+	// Custom: an empty folder, then a drawing and a Markdown file.
+	typeStr(a, "L")
+	ctrl(a, tcell.KeyRight)
+	a.render()
+	if !strings.Contains(screenText(a), "No pieces yet") {
+		t.Fatal("an empty custom tab says where pieces go")
+	}
+	ctrl(a, tcell.KeyEscape)
+	lib := filepath.Join(dir, "asciidraw", "library")
+	os.MkdirAll(lib, 0o755)
+	os.WriteFile(filepath.Join(lib, "logo.md"), []byte("# Logo\n\n```\n/\\_/\\\n( o.o )\n```\n"), 0o644)
+	os.WriteFile(filepath.Join(lib, "card.adraw"), must(encodeYAML([]object{{Kind: "box", X0: 4, Y0: 4, X1: 10, Y1: 7}})), 0o644)
+	os.WriteFile(filepath.Join(lib, "broken.adraw"), []byte("version: 9\n"), 0o644)
+	os.WriteFile(filepath.Join(lib, "notes.pdf"), []byte("x"), 0o644)
+	typeStr(a, "L")
+	ctrl(a, tcell.KeyRight)
+	var got []string
+	for _, it := range a.library.items[libCustom] {
+		got = append(got, it.name)
+	}
+	if !slices.Equal(got, []string{"broken", "card", "logo"}) {
+		t.Fatalf("custom pieces: %q", got)
+	}
+	if a.library.items[libCustom][0].err == nil {
+		t.Fatal("a file it can't read shows why")
+	}
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyEnter)
+	if len(a.objs) != 1 || a.objs[0].Kind != "text" || a.objs[0].Text[1] != "( o.o )" || a.objs[0].X0 != 5 {
+		t.Fatalf("a Markdown piece is one text shape: %+v", a.objs)
+	}
+	// An .adraw file opens as a drawing too.
+	pp, _, saveTo, _, err := loadDrawing(filepath.Join(lib, "card.adraw"))
+	if err != nil || len(pp[0]) != 1 || saveTo == "" {
+		t.Fatalf("open .adraw: %v", err)
+	}
+	if exportBase("/x/card.adraw") != "/x/card" {
+		t.Fatal("an .adraw drawing exports as card.md")
+	}
+}

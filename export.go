@@ -105,7 +105,7 @@ func fromFileExport(f *fileExport) (exportSettings, error) {
 // exportBase is a name with any export or drawing extension taken off.
 func exportBase(name string) string {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".png", ".jpg", ".jpeg", ".yaml", ".yml", ".txt":
+	case ".md", ".png", ".jpg", ".jpeg", ".yaml", ".yml", ".adraw", ".txt":
 		return strings.TrimSuffix(name, filepath.Ext(name))
 	}
 	return name

@@ -71,6 +71,19 @@ Delete every shape the rectangle touches, with any tool.
 .It ^T
 Open the menu of tools (Box, Oval, Line, Arrow, Fill, Erase, Select),
 widgets and styles (ascii, line, round, double).
+.It L
+Open the library of ready-made pieces, with two tabs: builtin and custom.
+Left and right switch tabs.
+Up and down pick a piece.
+Enter drops it where the mouse last was on the drawing, selected as one
+group.
+Esc closes the library.
+The builtin tab has a login dialog, a register dialog, a browser window, a
+web app with four panes and an open file dialog.
+The custom tab reads
+.Pa ~/.config/asciidraw/library/ ;
+see
+.Sx FILES .
 .El
 .Pp
 A line goes sideways from where you press, turns once, then goes up or down
@@ -314,8 +327,34 @@ if it is installed, or else
 .It Ev XDG_CACHE_HOME
 On Linux and the BSDs, recovery copies go under this folder instead of
 .Pa ~/.cache .
+.It Ev XDG_CONFIG_HOME
+If set, the custom library is
+.Pa $XDG_CONFIG_HOME/asciidraw/library/
+instead of
+.Pa ~/.config/asciidraw/library/ .
 .El
 .Sh FILES
+.Bl -tag -width Ds
+.It Pa ~/.config/asciidraw/library/
+Pieces for the custom tab of the library, one per file.
+.Nm
+makes the folder the first time you open the library.
+An
+.Pa .adraw
+or
+.Pa .yaml
+file is a drawing, and the piece is its first page.
+A
+.Pa .txt
+file is one text shape with the whole file in it.
+An
+.Pa .md
+file is one text shape with its first code block fenced with backticks,
+or the whole file if it has none.
+The file name, with dashes turned into spaces, names the piece, and a
+number in front sets the order.
+.El
+.Pp
 Every 30 seconds,
 .Nm
 writes unsaved changes to a recovery copy.

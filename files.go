@@ -291,7 +291,7 @@ func decodeObjects(fs []fileObject) ([]object, error) {
 
 func isYAML(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".yaml" || ext == ".yml"
+	return ext == ".yaml" || ext == ".yml" || ext == ".adraw"
 }
 
 // withExt swaps or adds an extension.

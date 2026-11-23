@@ -1,0 +1,86 @@
+# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export.
+version: 2
+pages:
+  - objects:
+      - kind: window
+        style: line
+        x0: 0
+        y0: 0
+        x1: 39
+        y1: 22
+        text:
+          - Create an account
+      - kind: text
+        x0: 3
+        y0: 4
+        text:
+          - Name
+      - kind: input
+        style: line
+        x0: 3
+        y0: 5
+        x1: 36
+        y1: 5
+        text:
+          - Jane Doe
+      - kind: text
+        x0: 3
+        y0: 7
+        text:
+          - Email
+      - kind: input
+        style: line
+        x0: 3
+        y0: 8
+        x1: 36
+        y1: 8
+        text:
+          - you@example.com
+      - kind: text
+        x0: 3
+        y0: 10
+        text:
+          - Password
+      - kind: input
+        style: line
+        x0: 3
+        y0: 11
+        x1: 36
+        y1: 11
+        text:
+          - ••••••••
+      - kind: text
+        x0: 3
+        y0: 13
+        text:
+          - Confirm password
+      - kind: input
+        style: line
+        x0: 3
+        y0: 14
+        x1: 36
+        y1: 14
+        text:
+          - ••••••••
+      - kind: checkbox
+        style: line
+        x0: 3
+        y0: 16
+        x1: 26
+        y1: 16
+        text:
+          - I agree to the terms
+        value: 0
+      - kind: button
+        style: line
+        x0: 3
+        y0: 18
+        x1: 36
+        y1: 20
+        text:
+          - Create account
+      - kind: text
+        x0: 3
+        y0: 21
+        text:
+          - Have an account? Sign in

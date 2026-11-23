@@ -1,0 +1,80 @@
+# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export.
+version: 2
+pages:
+  - objects:
+      - kind: window
+        style: line
+        x0: 0
+        y0: 0
+        x1: 55
+        y1: 21
+        text:
+          - Open file
+      - kind: dropdown
+        style: line
+        x0: 3
+        y0: 4
+        x1: 52
+        y1: 4
+        text:
+          - ~/Documents
+      - kind: box
+        style: line
+        x0: 3
+        y0: 6
+        x1: 52
+        y1: 15
+      - kind: text
+        x0: 5
+        y0: 7
+        text:
+          - ..
+          - Projects/
+          - Photos/
+          - notes.md
+          - report.pdf
+          - todo.txt
+      - kind: scrollbar
+        style: line
+        x0: 51
+        y0: 7
+        x1: 51
+        y1: 14
+        value: 0
+      - kind: text
+        x0: 3
+        y0: 17
+        text:
+          - Name
+      - kind: input
+        style: line
+        x0: 9
+        y0: 17
+        x1: 34
+        y1: 17
+        text:
+          - report.pdf
+      - kind: dropdown
+        style: line
+        x0: 36
+        y0: 17
+        x1: 52
+        y1: 17
+        text:
+          - All files
+      - kind: button
+        style: line
+        x0: 32
+        y0: 19
+        x1: 41
+        y1: 19
+        text:
+          - Cancel
+      - kind: button
+        style: line
+        x0: 45
+        y0: 19
+        x1: 52
+        y1: 19
+        text:
+          - Open

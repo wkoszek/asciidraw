@@ -10,7 +10,7 @@ var helpLeft = []string{
 	"  click          type, or box label",
 	"  ⇧drag          square or circle",
 	"  right-drag     delete shapes",
-	"  ^T             tools and styles",
+	"  ^T  L          tools, library",
 	"",
 	"Typing",
 	"  ←→↑↓ Home End  move the cursor",

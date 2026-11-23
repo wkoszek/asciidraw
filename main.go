@@ -96,6 +96,7 @@ type app struct {
 	wrote     map[string]bool // files ^E wrote this session; it replaces them without asking
 	exp       exportSettings
 	settings  *settings // the S dialog, while it is open; see export.go
+	library   *library  // the L library, while it is open; see library.go
 }
 
 // meta is what the drawing keeps besides its pages.
@@ -223,7 +224,7 @@ func (a *app) askPath(label, ext, initial string, done func(string)) {
 			a.say("Cancelled.")
 			return
 		}
-		if e := strings.ToLower(filepath.Ext(name)); e != ext && !(ext == ".yaml" && e == ".yml") {
+		if e := strings.ToLower(filepath.Ext(name)); e != ext && !(ext == ".yaml" && (e == ".yml" || e == ".adraw")) {
 			name = withExt(name, ext)
 		}
 		a.unlessExists(name, done)
@@ -287,6 +288,10 @@ func (a *app) key(ev *tcell.EventKey) bool {
 	}
 	if a.settings != nil {
 		a.settingsKey(ev)
+		return false
+	}
+	if a.library != nil {
+		a.libraryKey(ev)
 		return false
 	}
 	if a.placer != nil {
@@ -644,6 +649,8 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.clonePage()
 		case 'S':
 			a.openSettings()
+		case 'L':
+			a.openLibrary()
 		}
 		return
 	}
@@ -773,6 +780,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	}
 	if a.settings != nil {
 		a.settingsMouse(sx, sy, b)
+		a.swallow = held
+		return
+	}
+	if a.library != nil {
+		a.libraryMouse(sx, sy, b)
 		a.swallow = held
 		return
 	}
@@ -1292,6 +1304,9 @@ func (a *app) render() {
 	}
 	if a.settings != nil {
 		a.renderSettings()
+	}
+	if a.library != nil {
+		a.renderLibrary()
 	}
 
 	// Legend: as many items as fit.
