@@ -17,7 +17,7 @@ var helpLeft = []string{
 	"  Enter  Esc     new line, stop",
 	"",
 	"Files",
-	"  ^S  ^E         save, export .md",
+	"  ^S  ^E  S      save/export/setup",
 	"  ^N  ^Q         new drawing, quit",
 	"  ^Z  ^Y         undo, redo",
 	"",

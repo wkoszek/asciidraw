@@ -209,15 +209,29 @@ Copy the current page to a new page after it, and go to the copy.
 .It ^S
 Save the drawing as YAML.
 .It ^E
-Export the picture inside a Markdown code block, one block per page.
+Export the drawing in each format ticked in the export settings:
+Markdown, PNG and JPEG.
+Only Markdown is ticked at first.
 For
 .Pa mock.yaml
 it writes
-.Pa mock.md
+.Pa mock.md ,
+.Pa mock.png
+and
+.Pa mock.jpg
 in the same folder.
 It asks for a name if the drawing has none, and asks before it replaces a
 file the first time in a session.
 Exporting does not save the drawing.
+.It S
+Open the export settings.
+Pick the formats, the font size for images (12 pixels by default), a
+light or dark theme, and whether a drawing of several pages goes in one
+file or in one file per page, such as
+.Pa mock_page0.png .
+Enter keeps the changes and Esc throws them away.
+If you're typing text, press Esc first.
+The settings are saved with the drawing.
 .It ^N
 Start a new drawing.
 .It ^Q

@@ -87,16 +87,31 @@ type app struct {
 	clip      []object // what ^C copied, moved to 0,0
 	clipText  string   // its picture, as put on the system clipboard
 	showPanel bool
-	help      bool    // the ? screen is open
-	colors    *picker // the C color picker, when open
-	dropAt    int     // panel row a dragged row would land on, or -1
-	panelTop  int     // first object shown in the panel
-	suggest   string  // name offered by the first save of an imported file
-	exported  string  // where the last ^E export went
+	help      bool            // the ? screen is open
+	colors    *picker         // the C color picker, when open
+	dropAt    int             // panel row a dragged row would land on, or -1
+	panelTop  int             // first object shown in the panel
+	suggest   string          // name offered by the first save of an imported file
+	exported  string          // where the last ^E export went, without an extension
+	wrote     map[string]bool // files ^E wrote this session; it replaces them without asking
+	exp       exportSettings
+	settings  *settings // the S dialog, while it is open; see export.go
+}
+
+// meta is what the drawing keeps besides its pages.
+func (a *app) meta() docMeta { return docMeta{a.pal, a.exp} }
+
+func (a *app) setMeta(m docMeta) {
+	if m.Pal != nil {
+		a.pal = m.Pal
+	}
+	if m.Export.Font != 0 {
+		a.exp = m.Export
+	}
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, pal: slices.Clone(defaultPal), pages: []page{{}}, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true}
+	return &app{s: s, pal: slices.Clone(defaultPal), pages: []page{{}}, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true, exp: defaultExport()}
 }
 
 func (a *app) reset() {
@@ -233,12 +248,12 @@ func (a *app) unlessExists(path string, done func(string)) {
 
 func (a *app) write(path string) {
 	a.stopTyping()
-	if err := saveYAML(path, a.allPages(), a.pal); err != nil {
+	if err := saveYAML(path, a.allPages(), a.meta()); err != nil {
 		a.sayErr("Save failed: " + err.Error())
 		return
 	}
 	if path != a.file {
-		a.exported = "" // a new name exports next to the new file
+		a.exported, a.wrote = "", nil // a new name exports next to the new file
 	}
 	clearRecovery(a.file) // saved: no recovery copy needed, old name or new
 	clearRecovery(path)
@@ -247,35 +262,6 @@ func (a *app) write(path string) {
 		a.say(fmt.Sprintf("Saved %s (%d pages)", path, n))
 	} else {
 		a.say(fmt.Sprintf("Saved %s (%d objects)", path, len(a.objs)))
-	}
-}
-
-// export writes the picture as Markdown: next to the YAML file if there is
-// one, or under a name it asks for. It asks before replacing a file, except
-// the one this session already exported to.
-func (a *app) export() {
-	switch {
-	case a.exported != "":
-		a.writeMD(a.exported)
-	case a.file != "":
-		a.unlessExists(withExt(a.file, ".md"), a.writeMD)
-	default:
-		a.askPath("Export as: ", ".md", "", a.writeMD)
-	}
-}
-
-func (a *app) writeMD(path string) {
-	a.stopTyping()
-	pics := a.pictures()
-	if err := os.WriteFile(path, []byte(markdownPages(pics)), 0o644); err != nil {
-		a.sayErr("Export failed: " + err.Error())
-		return
-	}
-	a.exported = path
-	if len(pics) > 1 {
-		a.say(fmt.Sprintf("Exported %s (%d pages)", path, len(pics)))
-	} else {
-		a.say(fmt.Sprintf("Exported %s (%d lines)", path, strings.Count(pics[0], "\n")))
 	}
 }
 
@@ -297,6 +283,10 @@ func (a *app) key(ev *tcell.EventKey) bool {
 	}
 	if a.colors != nil {
 		a.pickerKey(ev)
+		return false
+	}
+	if a.settings != nil {
+		a.settingsKey(ev)
 		return false
 	}
 	if a.placer != nil {
@@ -652,6 +642,8 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.prevPage()
 		case '+':
 			a.clonePage()
+		case 'S':
+			a.openSettings()
 		}
 		return
 	}
@@ -776,6 +768,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	}
 	if a.colors != nil {
 		a.pickerMouse(sx, sy, b)
+		a.swallow = held
+		return
+	}
+	if a.settings != nil {
+		a.settingsMouse(sx, sy, b)
 		a.swallow = held
 		return
 	}
@@ -1293,6 +1290,9 @@ func (a *app) render() {
 	if a.placer != nil {
 		a.renderPlacer()
 	}
+	if a.settings != nil {
+		a.renderSettings()
+	}
 
 	// Legend: as many items as fit.
 	leg := tcell.StyleDefault.Reverse(true)
@@ -1301,7 +1301,7 @@ func (a *app) render() {
 	}
 	items := [][2]string{
 		{"click", "type"}, {"r-drag", "erase"}, {"^T", "tools"}, {"^S", "save"},
-		{"^E", "export .md"}, {"^C/^V", "copy/paste"}, {"^N", "new"}, {"^Q", "quit"},
+		{"^E", "export"}, {"^C/^V", "copy/paste"}, {"^N", "new"}, {"^Q", "quit"},
 		{"^Z/^Y", "undo/redo"}, {"^O", "objects"},
 	}
 	right := sw - a.pagerWidth()
@@ -1320,7 +1320,7 @@ func (a *app) render() {
 
 func main() {
 	var objs [][]object
-	var pal []string
+	var meta docMeta
 	file, suggest, note := "", "", ""
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
@@ -1333,7 +1333,7 @@ func main() {
 			return
 		}
 		var err error
-		objs, pal, file, note, err = loadDrawing(arg)
+		objs, meta, file, note, err = loadDrawing(arg)
 		switch {
 		case os.IsNotExist(err): // a new drawing under that name
 			file = arg
@@ -1374,9 +1374,7 @@ func main() {
 	a := newApp(s)
 	a.setPages(objs)
 	a.file, a.suggest = file, suggest
-	if pal != nil {
-		a.pal = pal
-	}
+	a.setMeta(meta)
 	a.say("Drag to draw. Click to type. Press ? for every key.")
 	if note != "" {
 		a.say(note)

@@ -21,9 +21,18 @@ const fileVersion = 2
 type fileDoc struct {
 	Version int          `yaml:"version"`
 	Palette []string     `yaml:"palette,omitempty"` // the 16 slots in the color panel
+	Export  *fileExport  `yaml:"export,omitempty"`  // the S settings; none means the defaults
 	Pages   []filePage   `yaml:"pages,omitempty"`
 	Objects []fileObject `yaml:"objects,omitempty"` // version 1 files: one page, no pages list
 }
+
+// docMeta is what a drawing keeps besides its pages.
+type docMeta struct {
+	Pal    []string
+	Export exportSettings
+}
+
+func defaultMeta() docMeta { return docMeta{slices.Clone(defaultPal), defaultExport()} }
 
 type filePage struct {
 	Objects []fileObject `yaml:"objects"`
@@ -104,20 +113,23 @@ func styleIndex(name string) (int, bool) {
 	return 0, false
 }
 
-func encodeYAML(objs []object) ([]byte, error) { return encodeDoc([][]object{objs}, nil) }
+func encodeYAML(objs []object) ([]byte, error) {
+	return encodeDoc([][]object{objs}, docMeta{Export: defaultExport()})
+}
 
-// encodeDoc writes the pages and the palette. Empty pages at the end are
-// left out, and so is the palette while it is still the default one.
-func encodeDoc(pages [][]object, pal []string) ([]byte, error) {
-	doc := fileDoc{Version: fileVersion}
-	if pal != nil && !slices.Equal(pal, defaultPal) {
-		doc.Palette = pal
+// encodeDoc writes the pages, the palette and the export settings. Empty
+// pages at the end are left out, and so are a palette and settings still
+// at their defaults.
+func encodeDoc(pages [][]object, m docMeta) ([]byte, error) {
+	doc := fileDoc{Version: fileVersion, Export: toFileExport(m.Export)}
+	if m.Pal != nil && !slices.Equal(m.Pal, defaultPal) {
+		doc.Palette = m.Pal
 	}
 	for _, objs := range trimPages(pages) {
 		doc.Pages = append(doc.Pages, filePage{Objects: encodeObjects(objs)})
 	}
 	var buf bytes.Buffer
-	buf.WriteString("# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export Markdown.\n")
+	buf.WriteString("# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export.\n")
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(doc); err != nil {
@@ -160,36 +172,53 @@ func decodeYAML(data []byte) ([]object, error) {
 	return pages[0], nil
 }
 
-// decodeDoc reads the pages and the palette. A version 1 file, with a bare
-// objects list, is one page. A file without a palette gets the default
-// one; a short one is filled up from it.
-func decodeDoc(data []byte) ([][]object, []string, error) {
+// decodeDoc reads the pages, the palette and the export settings. A
+// version 1 file, with a bare objects list, is one page. A file without a
+// palette gets the default one; a short one is filled up from it.
+func decodeDoc(data []byte) ([][]object, docMeta, error) {
+	pages, pal, ex, err := decodeParts(data)
+	return pages, docMeta{pal, ex}, err
+}
+
+func decodeParts(data []byte) ([][]object, []string, exportSettings, error) {
+	pages, pal, doc, err := decodePages(data)
+	if err != nil {
+		return nil, nil, exportSettings{}, err
+	}
+	ex, err := fromFileExport(doc.Export)
+	if err != nil {
+		return nil, nil, exportSettings{}, err
+	}
+	return pages, pal, ex, nil
+}
+
+func decodePages(data []byte) ([][]object, []string, fileDoc, error) {
 	var doc fileDoc
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, nil, err
+		return nil, nil, doc, err
 	}
 	if len(doc.Palette) > palSlots {
-		return nil, nil, fmt.Errorf("the palette has %d colors; it holds %d", len(doc.Palette), palSlots)
+		return nil, nil, doc, fmt.Errorf("the palette has %d colors; it holds %d", len(doc.Palette), palSlots)
 	}
 	pal := slices.Clone(defaultPal)
 	for i, c := range doc.Palette {
 		name, ok := cleanColor(c)
 		if !ok || name == "" {
-			return nil, nil, fmt.Errorf("palette color %d: unknown color %q", i+1, c)
+			return nil, nil, doc, fmt.Errorf("palette color %d: unknown color %q", i+1, c)
 		}
 		pal[i] = name
 	}
 	if doc.Version > fileVersion {
-		return nil, nil, fmt.Errorf("the file is version %d, newer than this asciidraw reads (%d); update asciidraw", doc.Version, fileVersion)
+		return nil, nil, doc, fmt.Errorf("the file is version %d, newer than this asciidraw reads (%d); update asciidraw", doc.Version, fileVersion)
 	}
 	if len(doc.Pages) > 0 && len(doc.Objects) > 0 {
-		return nil, nil, fmt.Errorf("the file has both pages and a bare objects list; put the objects in a page")
+		return nil, nil, doc, fmt.Errorf("the file has both pages and a bare objects list; put the objects in a page")
 	}
 	if len(doc.Pages) == 0 {
 		doc.Pages = []filePage{{Objects: doc.Objects}}
 	}
 	if len(doc.Pages) > maxPages {
-		return nil, nil, fmt.Errorf("the file has %d pages; a drawing holds at most %d", len(doc.Pages), maxPages)
+		return nil, nil, doc, fmt.Errorf("the file has %d pages; a drawing holds at most %d", len(doc.Pages), maxPages)
 	}
 	var pages [][]object
 	for n, p := range doc.Pages {
@@ -198,11 +227,11 @@ func decodeDoc(data []byte) ([][]object, []string, error) {
 			if len(doc.Pages) > 1 {
 				err = fmt.Errorf("page %s: %w", pageChar(n), err)
 			}
-			return nil, nil, err
+			return nil, nil, doc, err
 		}
 		pages = append(pages, objs)
 	}
-	return pages, pal, nil
+	return pages, pal, doc, nil
 }
 
 func decodeObjects(fs []fileObject) ([]object, error) {
@@ -270,8 +299,8 @@ func withExt(path, ext string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ext
 }
 
-func saveYAML(path string, pages [][]object, pal []string) error {
-	data, err := encodeDoc(pages, pal)
+func saveYAML(path string, pages [][]object, m docMeta) error {
+	data, err := encodeDoc(pages, m)
 	if err != nil {
 		return err
 	}
@@ -308,17 +337,17 @@ func markdownPages(pictures []string) string {
 // loadDrawing opens a .yaml drawing, or imports a .txt or .md picture as one
 // text object. saveTo is where ^S should write without asking: the file
 // itself for YAML, nothing for an import.
-func loadDrawing(path string) (pages [][]object, pal []string, saveTo, note string, err error) {
+func loadDrawing(path string) (pages [][]object, meta docMeta, saveTo, note string, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, "", "", err
+		return nil, docMeta{}, "", "", err
 	}
 	if isYAML(path) {
-		pages, pal, err = decodeDoc(data)
+		pages, meta, err = decodeDoc(data)
 		if err != nil {
-			return nil, nil, "", "", fmt.Errorf("%s: %w", path, err)
+			return nil, docMeta{}, "", "", fmt.Errorf("%s: %w", path, err)
 		}
-		return pages, pal, path, "", nil
+		return pages, meta, path, "", nil
 	}
 	var objs []object
 	text := strings.ReplaceAll(string(data), "\r", "")
@@ -329,7 +358,7 @@ func loadDrawing(path string) (pages [][]object, pal []string, saveTo, note stri
 	if text != "" {
 		objs = []object{{Kind: "text", Text: strings.Split(text, "\n")}}
 	}
-	return [][]object{objs}, slices.Clone(defaultPal), "", fmt.Sprintf("Imported %s as one text object. ^S saves it as YAML.", path), nil
+	return [][]object{objs}, defaultMeta(), "", fmt.Sprintf("Imported %s as one text object. ^S saves it as YAML.", path), nil
 }
 
 // firstFence returns the inside of the first fenced code block, or all of

@@ -1,6 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1870,18 +1875,20 @@ func TestPalette(t *testing.T) {
 	}
 
 	// Saved with the drawing, and only when it isn't the default.
-	data := string(must(encodeDoc([][]object{a.objs}, a.pal)))
+	data := string(must(encodeDoc([][]object{a.objs}, a.meta())))
 	if !strings.Contains(data, "palette:") || !strings.Contains(data, "#3b82f6") {
 		t.Fatalf("yaml:\n%s", data)
 	}
-	_, pal, err := decodeDoc([]byte(data))
+	_, m, err := decodeDoc([]byte(data))
+	pal := m.Pal
 	if err != nil || !slices.Equal(pal, a.pal) {
 		t.Fatalf("round trip: %v %v", err, pal)
 	}
-	if strings.Contains(string(must(encodeDoc([][]object{a.objs}, defaultPal))), "palette") {
+	if strings.Contains(string(must(encodeDoc([][]object{a.objs}, defaultMeta()))), "palette") {
 		t.Fatal("the default palette isn't written")
 	}
-	_, pal, err = decodeDoc([]byte("palette: ['#F80', red]\nobjects: []\n"))
+	_, m, err = decodeDoc([]byte("palette: ['#F80', red]\nobjects: []\n"))
+	pal = m.Pal
 	if err != nil || pal[0] != "#ff8800" || pal[1] != "red" || pal[2] != defaultPal[2] {
 		t.Fatalf("a short palette fills up from the default: %v %v", err, pal)
 	}
@@ -2335,7 +2342,7 @@ func TestPages(t *testing.T) {
 
 	// Saved as a list of pages; an empty page at the end is left out.
 	a.pages = append(a.pages, page{})
-	data := string(must(encodeDoc(a.allPages(), a.pal)))
+	data := string(must(encodeDoc(a.allPages(), a.meta())))
 	if !strings.Contains(data, "pages:") || strings.Count(data, "- objects:") != 4 || !strings.Contains(data, "version: 2") {
 		t.Fatalf("yaml:\n%s", data)
 	}
@@ -2399,4 +2406,153 @@ func screenText(a *app) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// S opens the export settings. ^E writes every ticked format; pages go in
+// one file or one file per page; the settings are saved with the drawing.
+func TestExportSettings(t *testing.T) {
+	a := testAppSized(t, 80, 24)
+	dir := t.TempDir()
+	a.file = filepath.Join(dir, "mock.yaml")
+	drag2(a, 0, 0, 10, 4)
+	ctrl(a, tcell.KeyEscape)
+
+	typeStr(a, "S")
+	if a.settings == nil {
+		t.Fatal("S opens the settings")
+	}
+	// Write row: untick the only format is refused, then tick PNG and JPEG.
+	typeStr(a, " ")
+	if !a.msgErr || !a.exp.has("md") {
+		t.Fatal("at least one format stays ticked")
+	}
+	ctrl(a, tcell.KeyRight)
+	typeStr(a, " ")
+	ctrl(a, tcell.KeyRight)
+	typeStr(a, " ")
+	if !slices.Equal(a.exp.Formats, []string{"md", "png", "jpg"}) {
+		t.Fatalf("formats: %v", a.exp.Formats)
+	}
+	// Font row follows the cursor: 12 is the default, Right picks 14.
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyRight)
+	if a.exp.Font != 14 {
+		t.Fatalf("font: %d", a.exp.Font)
+	}
+	a.render()
+	if !strings.Contains(screenText(a), "mock.md, mock.png, mock.jpg") {
+		t.Fatal("the dialog says what ^E writes")
+	}
+	ctrl(a, tcell.KeyEscape)
+	if !a.exp.isDefault() || a.dirty && a.settings != nil {
+		t.Fatal("Esc puts the settings back")
+	}
+	typeStr(a, "S")
+	ctrl(a, tcell.KeyRight)
+	typeStr(a, " ")
+	ctrl(a, tcell.KeyEnter)
+	if a.settings != nil || !a.exp.has("png") {
+		t.Fatal("Enter keeps the settings")
+	}
+
+	// One page: mock.md and mock.png.
+	ctrl(a, tcell.KeyCtrlE)
+	for _, f := range []string{"mock.md", "mock.png"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Fatalf("one page writes %s: %v", f, err)
+		}
+	}
+	data := must(os.ReadFile(filepath.Join(dir, "mock.png")))
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cw, ch := cellSize(12)
+	if img.Bounds().Dx() != 13*cw || img.Bounds().Dy() != 7*ch {
+		t.Fatalf("an 11×5 box plus a cell of margin: %v", img.Bounds())
+	}
+	if _, ok := img.(*image.Paletted); !ok || len(data) > 2000 {
+		t.Fatalf("a small paletted PNG: %T, %d bytes", img, len(data))
+	}
+
+	// Two pages, a file per page: mock_page0.png, mock_page1.png.
+	typeStr(a, "+")
+	a.exp.Split = true
+	a.exported = ""
+	ctrl(a, tcell.KeyCtrlE) // new names, so nothing to ask about
+	for _, f := range []string{"mock_page0.md", "mock_page1.md", "mock_page0.png", "mock_page1.png"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Fatalf("split pages write %s: %v", f, err)
+		}
+	}
+	// Together, two pages make one taller image. mock.png is there from
+	// before; in a new session, it asks first.
+	a.exp.Split = false
+	a.exported, a.wrote = "", nil
+	ctrl(a, tcell.KeyCtrlE)
+	if a.prompt == nil || !strings.Contains(a.prompt.label, "1 more exist") {
+		t.Fatal("asks before replacing mock.md and mock.png")
+	}
+	typeStr(a, "y")
+	ctrl(a, tcell.KeyEnter)
+	img, err = png.Decode(bytes.NewReader(must(os.ReadFile(filepath.Join(dir, "mock.png")))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img.Bounds().Dy() != (5+1+5+2)*ch {
+		t.Fatalf("two pages stacked with a gap: %v", img.Bounds())
+	}
+
+	// A format ticked later still asks about a file that was already there.
+	os.WriteFile(filepath.Join(dir, "mock.jpg"), []byte("old"), 0o644)
+	a.exp.Formats = []string{"md", "png", "jpg"}
+	ctrl(a, tcell.KeyCtrlE)
+	if a.prompt == nil || !strings.Contains(a.prompt.label, "mock.jpg exists") {
+		t.Fatal("asks about mock.jpg, not the files it wrote")
+	}
+	ctrl(a, tcell.KeyEscape)
+
+	// Saved with the drawing, and back on open.
+	a.exp.Theme, a.exp.Font = "dark", 20
+	a.write(a.file)
+	yml := string(must(os.ReadFile(a.file)))
+	if !strings.Contains(yml, "export:") || !strings.Contains(yml, "theme: dark") {
+		t.Fatalf("yaml:\n%s", yml)
+	}
+	_, m, _, _, err := loadDrawing(a.file)
+	if err != nil || m.Export.Theme != "dark" || m.Export.Font != 20 || !m.Export.has("png") {
+		t.Fatalf("reopen: %v %+v", err, m.Export)
+	}
+	if strings.Contains(string(must(encodeYAML(a.objs))), "export:") {
+		t.Fatal("default settings aren't written")
+	}
+	if _, _, err := decodeDoc([]byte("export:\n  formats: [gif]\n")); err == nil {
+		t.Fatal("an unknown format is an error")
+	}
+
+	// JPEG works too, and a picture with no color is stored as grayscale.
+	j := must(encodeJPEG(renderPages([][]object{a.objs}, 12, themes["light"])))
+	if g, err := jpeg.Decode(bytes.NewReader(j)); err != nil || g.ColorModel() != color.GrayModel {
+		t.Fatalf("gray jpeg: %v", err)
+	}
+}
+
+// Every line character meets its neighbor at the cell edge, with no gap.
+func TestImageLinesMeet(t *testing.T) {
+	for _, st := range []int{1, 2, 3} {
+		objs := []object{{Kind: "box", X0: 0, Y0: 0, X1: 4, Y1: 3, Style: st}}
+		img := renderPages([][]object{objs}, 12, themes["light"])
+		cw, ch := cellSize(12)
+		bg := themes["light"].bg
+		// Along the top edge, the middle row of the cells is drawn all the way.
+		y := ch + ch/2
+		if st == 3 {
+			y -= 1 // a double line's outer line
+		}
+		for x := cw + cw/2 + 2; x < 5*cw; x++ {
+			if img.RGBAAt(x, y) == bg {
+				t.Fatalf("style %d: gap at x=%d", st, x)
+			}
+		}
+	}
 }

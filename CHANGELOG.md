@@ -19,6 +19,13 @@ before you tag.
   one. Click a name to go to that page.
 - ^E exports each page in its own code block, leaving out empty pages at
   the end.
+- PNG and JPEG export. `S` opens the export settings. There you pick the
+  formats ^E writes and the font size for images, 12px by default.
+- The settings also pick a light or dark theme for images, and one file
+  for all pages or a file per page, such as `mock_page0.png`. They are
+  saved in the drawing file under `export`.
+- PNGs are stored with a small list of colors when the picture allows,
+  so a screen-sized drawing usually makes a PNG of a few kilobytes.
 - The drawing file is now a list of pages (`version: 2`). Older files open
   as one page. v0.1.0 doesn't check the version, so it opens a version 2
   file as an empty drawing; don't save over the file from v0.1.0. From now

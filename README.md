@@ -508,7 +508,8 @@ last copied in asciidraw.
 | Key | Does |
 |---|---|
 | ^S | save |
-| ^E | export Markdown |
+| ^E | export (see Export) |
+| S (Shift-s) | export settings: formats, font size, theme, pages |
 | ^N | new drawing |
 | ^Z / ^Y | undo / redo |
 | ^T | tools and styles |
@@ -558,10 +559,7 @@ Saving leaves out empty pages at the end too.
 You can't delete a page in the middle yet. To clear a page, press ^A, then
 `x`. The empty page stays.
 
-^E exports each page in its own code block. Above each block it writes
-`Page` and the page's name, such as `Page 2` for the page named `2`. Empty
-pages at the end are left out. A drawing with one page exports as one
-code block, with no `Page` line.
+^E exports all the pages. See Export for how they are split into files.
 
 ## Scrolling
 
@@ -640,19 +638,65 @@ Files saved before pages existed say `version: 1` and have an `objects`
 list and no `pages`. They open as one page. The next save turns them into
 `version: 2`.
 
-**^E** writes the pictures inside code blocks, one per page. For `mock.yaml` it writes
-`mock.md` in the same folder. If the drawing has no name yet, it asks for
-one.
-
-If `mock.md` already exists, ^E asks before replacing it. After that, later
-exports in the same session replace it without asking. Make your changes in
-the drawing, not in the export. Exporting does not save the drawing; press
-^S for that.
+The export settings from **S** are saved in the file too; see Export.
 
 Opening a `.txt` or `.md` file brings the picture in as one text shape. For
 Markdown, it takes the first code block fenced with backticks, or the whole
 file if there is none. The first save then offers the same name with
 `.yaml`.
+
+## Export
+
+**^E** exports the drawing in each format ticked in the export settings:
+Markdown, PNG and JPEG. Only Markdown is ticked at first. For `mock.yaml`
+it writes `mock.md`, `mock.png` and `mock.jpg` in the same folder. If the
+drawing has no name yet, it asks for one.
+
+If a file it would write is already there, ^E asks before replacing it.
+Files that ^E wrote earlier in the same session are replaced without
+asking. The next export overwrites the file, so make your changes in the
+drawing, not in the export. Exporting does not save the drawing; press
+^S for that.
+
+**S** (Shift-s) opens the export settings. If you're typing text, press
+Esc first. Up and down move between rows, and left and right move along
+a row. Enter keeps your changes and Esc throws them away. You can also
+click.
+
+- **Write** picks the formats. Press Space to tick or untick the one under
+  the cursor. You can't untick the last one.
+- **Font** is the font size for PNG and JPEG: 10, 12, 14, 16, 20 or 24
+  pixels. 12 is the default. At 12, each character takes 7 by 15 pixels.
+  The window shows the image size of the page you're on.
+- **Theme** is light (dark text on white) or dark (light text on near
+  black).
+- **Pages** says what to do with a drawing of several pages. "One file"
+  writes one file per format, such as `mock.md` and `mock.png`, with all
+  the pages in it. "A file per page" adds the page's name to each file:
+  `mock_page0.png`, `mock_page1.png` and so on. Page names start at `0`,
+  as in the corner of the screen. A drawing with one page always gets
+  plain names such as `mock.png`.
+
+The settings are saved in the drawing file, under `export`, once you
+change them from the defaults. Changing them marks the drawing as
+changed, so press ^S to keep them.
+
+When a Markdown file holds several pages, each page gets its own code
+block, with a line such as `Page 2` above it. When an image holds
+several pages, they sit one under another with a thin line between them.
+Empty pages at the end are left out.
+
+PNG is the format to pick for small files. A drawing that fills the
+screen usually makes a PNG of a few kilobytes. A JPEG of the same
+drawing is usually several times bigger, because JPEG is made for
+photos, not lines and letters. A JPEG with no color in it is saved in
+grays, which makes it a little smaller.
+
+Letters use Go Mono, a font built into asciidraw, so an image looks the
+same on every computer. Box lines, corners, shades and arrowheads are
+drawn as shapes, so lines meet with no gaps. The ascii style's `-`, `|`
+and `+` are letters, like the rest of the text. Named colors like red
+get one fixed shade in images.
 
 ## Cmd keys in Ghostty
 

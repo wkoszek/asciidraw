@@ -186,3 +186,11 @@ Exports to:
 - [ ] PIC (manual pages)
 - [ ] Graphviz
 - [ ] TeX/LaTeX
+- [ ] HTML
+
+## Sumcommands
+
+We need to add:
+
+- [ ] asciidraw export <file> <output>
+- [ ] asciidraw convert <file> <output>

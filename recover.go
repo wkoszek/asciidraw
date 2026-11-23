@@ -43,7 +43,7 @@ func (a *app) autosave() {
 	if !a.dirty {
 		return
 	}
-	data, err := encodeDoc(a.allPages(), a.pal)
+	data, err := encodeDoc(a.allPages(), a.meta())
 	if err != nil {
 		return
 	}
@@ -59,31 +59,32 @@ func (a *app) autosave() {
 func clearRecovery(file string) { os.Remove(recoverPath(file)) }
 
 // loadRecovery reads the recovery copy for a drawing, if there is one.
-func loadRecovery(file string) ([][]object, []string, time.Time, bool) {
+func loadRecovery(file string) ([][]object, docMeta, time.Time, bool) {
 	p := recoverPath(file)
 	info, err := os.Stat(p)
 	if err != nil {
-		return nil, nil, time.Time{}, false
+		return nil, docMeta{}, time.Time{}, false
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return nil, nil, time.Time{}, false
+		return nil, docMeta{}, time.Time{}, false
 	}
-	pages, pal, err := decodeDoc(data)
+	pages, meta, err := decodeDoc(data)
 	if err != nil {
-		return nil, nil, time.Time{}, false
+		return nil, docMeta{}, time.Time{}, false
 	}
-	return pages, pal, info.ModTime(), true
+	return pages, meta, info.ModTime(), true
 }
 
 // recover swaps in the recovery copy for the drawing just opened, if any.
 func (a *app) recover() {
-	pages, pal, when, ok := loadRecovery(a.file)
+	pages, meta, when, ok := loadRecovery(a.file)
 	if !ok {
 		return
 	}
 	a.setPages(pages)
-	a.pal, a.dirty = pal, true
+	a.setMeta(meta)
+	a.dirty = true
 	what := "unsaved changes"
 	if a.file == "" {
 		what = "an unsaved drawing"
