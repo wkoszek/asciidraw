@@ -749,9 +749,12 @@ stops unless:
 - HEAD is the same commit as tig's `main`, and
 - `CHANGELOG.md` has a section for the new version.
 
-When some commits since the last tag don't follow the format, pick the bump
-yourself: `BUMP=minor make rel`. If a release fails after the tag is made,
-run `make rel` again. It reuses the tag on HEAD.
+When some commits since the last tag don't follow the format, `make rel`
+can't pick the version. It lists those commits and prints the three commands
+to choose from, such as `make rel BUMP=minor`, with the version each one
+makes. Pass `BUMP` again if you rerun before the tag exists. If a release
+fails after the tag is made, run `make rel` again. It reuses the tag on
+HEAD.
 
 Next, `make release` copies that version's section of `CHANGELOG.md` into
 `build/notes.md` and hands off to GoReleaser. GoReleaser

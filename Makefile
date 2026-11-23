@@ -74,13 +74,13 @@ changelog:
 
 ## rel: the whole release: draft the changelog, edit it, commit, push, publish
 rel:
-	@[ -z "$$(git status --porcelain)" ] || { echo "✗ Commit or stash your changes first."; exit 1; }
-	@if ! git describe --tags --exact-match --match 'v[0-9]*' HEAD >/dev/null 2>&1; then \
+	@v=$$(git describe --tags --exact-match --match 'v[0-9]*' HEAD 2>/dev/null) || \
 		v=$$(scripts/release.sh next) || exit 1; \
-		if ! grep -q "^## $$v " CHANGELOG.md; then \
-			scripts/release.sh draft && $${EDITOR:-vi} CHANGELOG.md && \
-			git commit -q -m "docs: changelog for $$v" CHANGELOG.md || exit 1; \
-		fi; \
+	echo "Releasing $$v."; \
+	[ -z "$$(git status --porcelain)" ] || { echo "✗ Commit or stash your changes first."; exit 1; }; \
+	if ! grep -q "^## $$v " CHANGELOG.md; then \
+		scripts/release.sh draft && $${EDITOR:-vi} CHANGELOG.md && \
+		git commit -q -m "docs: changelog for $$v" CHANGELOG.md || exit 1; \
 	fi
 	git push -q tig main
 	@$(MAKE) --no-print-directory release

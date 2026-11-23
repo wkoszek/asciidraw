@@ -100,8 +100,31 @@ cmd_log() {
 	for c in $(git rev-list --no-merges --reverse "$(range)"); do
 		printf '  %-8s %s\n' "$(bump_of "$c")" "$(git log -1 --format='%h %s' "$c")"
 	done
-	v=$(cmd_next 2>&1) || true
-	echo "Next: $v"
+	if v=$(cmd_next 2>/dev/null); then
+		echo "Next: $v"
+	else
+		echo
+		(cmd_next) 2>&1 || true
+	fi
+}
+
+# bumped LEVEL: the last tag moved up by LEVEL (3 major, 2 minor, 1 patch).
+bumped() {
+	t=$(last_tag)
+	set -- $(echo "${t:-v0.0.0}" | sed 's/^v//; s/[-+].*//' | tr . ' ')
+	case $LEVEL in
+	3) echo "v$(($1 + 1)).0.0" ;;
+	2) echo "v$1.$(($2 + 1)).0" ;;
+	1) echo "v$1.$2.$(($3 + 1))" ;;
+	esac
+}
+
+# Tell the user how to pick the bump by hand, with what each choice gives.
+bump_hint() {
+	echo "  Pick one:" >&2
+	LEVEL=1 && echo "    make rel BUMP=patch   only fixes             -> $(bumped)" >&2
+	LEVEL=2 && echo "    make rel BUMP=minor   something new          -> $(bumped)" >&2
+	LEVEL=3 && echo "    make rel BUMP=major   breaks old drawings    -> $(bumped)" >&2
 }
 
 cmd_next() {
@@ -114,27 +137,32 @@ cmd_next() {
 		unknown) unknown=$((unknown + 1)) ;;
 		esac
 	done
+	# Before 1.0, a breaking change is a minor bump.
+	t=$(last_tag)
+	case ${t:-v0} in v0.*) [ $level -lt 3 ] || level=2 ;; esac
+
 	case ${BUMP:-} in
 	major) level=3 ;;
 	minor) level=2 ;;
 	patch) level=1 ;;
 	"")
-		[ $unknown -eq 0 ] || die "$unknown commit(s) since the last tag aren't conventional, so the version is a guess. Say which with BUMP=patch|minor|major."
+		if [ $unknown -gt 0 ]; then
+			echo "✗ I can't tell the next version. These commits since ${t:-the start} don't say feat:, fix: and so on:" >&2
+			for c in $(git rev-list --no-merges --reverse "$(range)"); do
+				[ "$(bump_of "$c")" != unknown ] || echo "    $(git log -1 --format='%h %s' "$c")" >&2
+			done
+			bump_hint
+			exit 1
+		fi
 		;;
 	*) die "BUMP must be patch, minor or major, not $BUMP" ;;
 	esac
-	[ $level -gt 0 ] || die "Nothing to release: no feat, fix or perf commits since $(last_tag)."
-
-	t=$(last_tag)
-	set -- $(echo "${t:-v0.0.0}" | sed 's/^v//; s/[-+].*//' | tr . ' ')
-	major=$1 minor=$2 patch=$3
-	# Before 1.0, a breaking change is a minor bump.
-	[ "$major" -gt 0 ] || [ $level -lt 3 ] || level=2
-	case $level in
-	3) echo "v$((major + 1)).0.0" ;;
-	2) echo "v$major.$((minor + 1)).0" ;;
-	1) echo "v$major.$minor.$((patch + 1))" ;;
-	esac
+	if [ $level -eq 0 ]; then
+		echo "✗ Nothing to release: no feat:, fix: or perf: commits since ${t:-the start}. To release anyway:" >&2
+		bump_hint
+		exit 1
+	fi
+	LEVEL=$level; bumped
 }
 
 # Strip "type(scope)!: " and capitalize what's left.
