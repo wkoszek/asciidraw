@@ -7,7 +7,7 @@ LDFLAGS := -X main.version=$(VERSION)
 
 # GitHub token for `make release`: publishes the GitHub release and pushes the
 # cask to wkoszek/homebrew-tap.
-GITHUB_TOKEN_REF = op://infra/github-pat-wkoszek/credential
+GITHUB_TOKEN_REF = op://infra/github-pat-wkoszek/token
 
 all: check build
 
