@@ -11,7 +11,8 @@ GITHUB_TOKEN_REF = op://infra/github-pat-wkoszek/token
 # Gitea token: asks tig to push the new tag to the GitHub mirror right away.
 GITEA_TOKEN_REF = op://infra/gitea-pat-wkoszek/token
 
-all: check build
+## all: format, vet, test with -race, then build (the default)
+all: fmt vet test build
 
 ## build: compile ./asciidraw
 build: check-conflicts
@@ -21,9 +22,9 @@ build: check-conflicts
 run: build
 	./$(BINARY_NAME) $(FILE)
 
-## test: run the tests
+## test: run the tests with the race detector
 test:
-	go test ./...
+	go test -race ./...
 
 ## fmt: format the source
 fmt:
@@ -40,7 +41,7 @@ check: check-conflicts
 		echo "✗ not gofmt'd (run make fmt):"; echo "$$unformatted" | sed 's/^/    /'; exit 1; \
 	fi
 	go vet ./...
-	go test ./...
+	go test -race ./...
 
 ## install: install into $(GOBIN)
 install: check-conflicts
