@@ -24,8 +24,10 @@ before you tag.
   app and an open file dialog. The custom tab reads `.adraw`, `.yaml`,
   `.md` and `.txt` files from `~/.config/asciidraw/library/`, or from
   `$XDG_CONFIG_HOME/asciidraw/library/` if that is set.
-- asciidraw now opens and saves `.adraw` files. They hold the same YAML
-  as `.yaml` files.
+- Drawings are now `.adraw` files. ^S adds `.adraw` to a name typed with
+  no extension, and `asciidraw mock` opens `mock.adraw`, or starts it.
+  They hold the same YAML as before, and `.yaml` and `.yml` files still
+  open and save under their own names.
 - `asciidraw export <file> <output>` saves a drawing as Markdown, PNG or
   JPEG without opening it. The output's extension sets the format.
   `--font`, `--theme` and `--pages` override the saved export settings

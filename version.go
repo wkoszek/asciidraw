@@ -25,10 +25,10 @@ const usage = `usage: asciidraw [file]
        asciidraw convert <file> <output>
 
   asciidraw              a new, untitled drawing
-  asciidraw mock.yaml    open a drawing, or start a new one under that name
+  asciidraw mock.adraw   open a drawing, or start a new one under that name
   asciidraw notes.md     bring in a picture from Markdown or plain text
 
-  asciidraw export mock.yaml mock.png
+  asciidraw export mock.adraw mock.png
                          write a picture without opening the drawing; the
                          output's extension picks .md, .png, .jpg, .svg or
                          .html. Flags:

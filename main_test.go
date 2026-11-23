@@ -85,8 +85,8 @@ func TestDrawTypeSave(t *testing.T) {
 	typeStr(a, filepath.Join(dir, "mock"))
 	ctrl(a, tcell.KeyEnter)
 	a.render()
-	if a.file != filepath.Join(dir, "mock.yaml") || a.dirty {
-		t.Fatalf("file=%q dirty=%v", a.file, a.dirty)
+	if a.file != filepath.Join(dir, "mock.adraw") || a.dirty {
+		t.Fatalf("a new drawing is saved as .adraw: file=%q dirty=%v", a.file, a.dirty)
 	}
 
 	// The YAML brings the objects back.
@@ -2784,5 +2784,43 @@ func TestSVGAndHTML(t *testing.T) {
 	}
 	if _, err := fromFileExport(&fileExport{Formats: []string{"svg", "html"}}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Save as keeps a .yaml name as typed; other names get .adraw.
+func TestSaveAsExtension(t *testing.T) {
+	dir := t.TempDir()
+	for typed, want := range map[string]string{"a": "a.adraw", "b.yaml": "b.yaml", "c.yml": "c.yml", "d.adraw": "d.adraw", "e.txt": "e.adraw"} {
+		a := testApp(t)
+		ctrl(a, tcell.KeyCtrlS)
+		typeStr(a, filepath.Join(dir, typed))
+		ctrl(a, tcell.KeyEnter)
+		if a.file != filepath.Join(dir, want) {
+			t.Fatalf("%s saved as %s, want %s", typed, filepath.Base(a.file), want)
+		}
+	}
+}
+
+// "asciidraw mock" opens mock.adraw or mock.yaml if there is one.
+func TestDrawingPath(t *testing.T) {
+	dir := t.TempDir()
+	at := func(n string) string { return filepath.Join(dir, n) }
+	if drawingPath(at("mock")) != at("mock") {
+		t.Fatal("nothing there: the name as given")
+	}
+	os.WriteFile(at("old.yaml"), []byte("version: 2\n"), 0o644)
+	if drawingPath(at("old")) != at("old.yaml") {
+		t.Fatal("finds old.yaml")
+	}
+	os.WriteFile(at("old.adraw"), []byte("version: 2\n"), 0o644)
+	if drawingPath(at("old")) != at("old.adraw") {
+		t.Fatal(".adraw comes first")
+	}
+	os.WriteFile(at("old"), []byte("x"), 0o644)
+	if drawingPath(at("old")) != at("old") {
+		t.Fatal("a file with the very name wins")
+	}
+	if drawingPath(at("new.yaml")) != at("new.yaml") {
+		t.Fatal("a drawing name stays")
 	}
 }

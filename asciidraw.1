@@ -33,7 +33,9 @@ With no
 .Ar file ,
 .Nm
 starts an untitled drawing.
-A
+An
+.Pa .adraw
+or
 .Pa .yaml
 file opens as a drawing.
 If it does not exist,
@@ -43,10 +45,16 @@ A
 .Pa .txt
 or
 .Pa .md
-file comes in as one text shape: the first code block fenced with backticks,
+file opens as one text shape: the first code block fenced with backticks,
 or the whole file if there is none.
-The first save then offers the same name with
-.Pa .yaml .
+The first save suggests the same name with
+.Pa .adraw ,
+so the original file stays as it was.
+A name with no file of its own, such as
+.Ar mock ,
+opens
+.Pa mock.adraw
+if there is one.
 .Pp
 The terminal must pass mouse clicks and drags to programs.
 .Pp
@@ -273,13 +281,21 @@ Copy the current page to a new page after it, and go to the copy.
 .Ss Files and view
 .Bl -tag -width "PgUp, PgDn"
 .It ^S
-Save the drawing as YAML.
+Save the drawing.
+A name typed with no extension gets
+.Pa .adraw .
+A name ending in
+.Pa .yaml
+or
+.Pa .yml
+keeps it.
+All three kinds of file hold the same YAML.
 .It ^E
 Export the drawing in each format ticked in the export settings:
 Markdown, PNG, JPEG, SVG and HTML.
 Only Markdown is ticked at first.
 For
-.Pa mock.yaml ,
+.Pa mock.adraw ,
 with every format ticked, it writes
 .Pa mock.md ,
 .Pa mock.png ,
@@ -447,9 +463,13 @@ and
 exit with 2 for a wrong extension or a bad flag.
 .Sh EXAMPLES
 Start a new drawing called
-.Pa login.yaml :
+.Pa login.adraw :
 .Pp
-.Dl asciidraw login.yaml
+.Dl asciidraw login.adraw
+.Pp
+Open it again later; the extension can be left off:
+.Pp
+.Dl asciidraw login
 .Pp
 Bring in the first code block of a Markdown file:
 .Pp

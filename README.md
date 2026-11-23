@@ -5,7 +5,8 @@ Draw ASCII mockups in the terminal with your mouse.
 You drag to make boxes, ovals, lines and arrows. You click to type. You can
 also add widgets, such as buttons, checkboxes, input fields and tabs. Each
 shape stays separate, so you can move it, resize it, copy it or delete it
-later. Save the drawing as YAML and export the picture as Markdown.
+later. Save the drawing in an `.adraw` file, and export the picture as
+Markdown, PNG, JPEG, SVG or HTML.
 
 ```
 ╭──────────────────╮                ╭────────────────╮
@@ -48,16 +49,17 @@ otherwise. That is usually `~/go/bin`. Make sure that folder is on your PATH.
 
 ```sh
 asciidraw              # a new, untitled drawing
-asciidraw mock.yaml    # open a drawing, or start a new one under that name
+asciidraw mock.adraw   # open a drawing, or start a new one under that name
+asciidraw mock         # the same: opens mock.adraw, or starts it
 asciidraw notes.md     # bring in a picture from Markdown or plain text
 ```
 
 Two commands work without opening the drawing on screen:
 
 ```sh
-asciidraw export mock.yaml mock.png        # also .md, .jpg, .svg or .html
-asciidraw export --font 16 --theme dark mock.yaml mock.png
-asciidraw convert notes.md notes.adraw     # also .yaml
+asciidraw export mock.adraw mock.png       # also .md, .jpg, .svg or .html
+asciidraw export --font 16 --theme dark mock.adraw mock.png
+asciidraw convert notes.md notes.adraw     # or notes.yaml
 ```
 
 `export` saves the drawing as Markdown, PNG, JPEG, SVG or HTML. The output's
@@ -75,7 +77,8 @@ drawing file stays the same. Put the flags before the file names:
   file. If only one page is left, the file keeps the plain name.
 
 Use `convert` to turn a Markdown or text file into a drawing, or to
-switch a drawing between `.yaml` and `.adraw`.
+switch a drawing between `.yaml` and `.adraw`. Between those two, the
+contents stay the same; only the name changes.
 
 Both commands overwrite the output without asking, and print the names
 of the files they wrote. They exit with 0 when they work, 1 when a file
@@ -669,8 +672,11 @@ write it wins.
 
 ## Files
 
-**^S** saves the drawing as YAML: a list of pages, each with one entry per
-shape. Coordinates are columns and rows, counted from 0 at the top left.
+**^S** saves the drawing in an `.adraw` file. Type a name without an
+extension and ^S adds `.adraw`. An `.adraw` file is YAML: a list of
+pages, each with one entry per shape. You can use a `.yaml` or `.yml`
+extension instead. asciidraw treats all three the same and keeps the
+extension you typed. Coordinates are columns and rows, counted from 0 at the top left.
 Styles are stored by name, so the file is easy to edit by hand:
 
 ```yaml
@@ -715,14 +721,14 @@ The export settings from **S** are saved in the file too; see Export.
 
 Opening a `.txt` or `.md` file brings the picture in as one text shape. For
 Markdown, it takes the first code block fenced with backticks, or the whole
-file if there is none. The first save then offers the same name with
-`.yaml`.
+file if there is none. The first save suggests the same name with
+`.adraw`, such as `notes.adraw`, so `notes.md` stays as it was.
 
 ## Export
 
 **^E** exports the drawing in each format ticked in the export settings:
 Markdown, PNG, JPEG, SVG and HTML. Only Markdown is ticked at first. For
-`mock.yaml`, with every format ticked, it writes `mock.md`, `mock.png`,
+`mock.adraw`, with every format ticked, it writes `mock.md`, `mock.png`,
 `mock.jpg`, `mock.svg` and `mock.html` in the same folder. If the drawing has no name yet, it asks
 for one.
 
@@ -818,7 +824,7 @@ OSC 52, so paste then uses the shapes you last copied in asciidraw.
 
 ```sh
 make check     # gofmt, go vet, tests
-make run       # build and start; make run FILE=mock.yaml opens a file
+make run       # build and start; make run FILE=mock.adraw opens a file
 make snapshot  # build every release package into dist/, publish nothing
 make help      # every target
 ```

@@ -294,6 +294,23 @@ func isYAML(path string) bool {
 	return ext == ".yaml" || ext == ".yml" || ext == ".adraw"
 }
 
+// drawingPath finds the file a name on the command line means. A name
+// with no file of its own opens mock.adraw, or mock.yaml, if there is
+// one, so "asciidraw mock" never starts over a drawing that exists.
+func drawingPath(arg string) string {
+	if _, err := os.Stat(arg); err == nil || isYAML(arg) {
+		return arg
+	}
+	for _, ext := range []string{".adraw", ".yaml", ".yml"} {
+		if p := withExt(arg, ext); p != arg {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
+	return arg
+}
+
 // withExt swaps or adds an extension.
 func withExt(path, ext string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path)) + ext

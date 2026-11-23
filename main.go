@@ -209,7 +209,7 @@ func expandHome(p string) string {
 
 func (a *app) save() {
 	if a.file == "" {
-		a.askPath("Save as: ", ".yaml", a.suggest, a.write)
+		a.askPath("Save as: ", ".adraw", a.suggest, a.write)
 		return
 	}
 	a.write(a.file)
@@ -224,7 +224,7 @@ func (a *app) askPath(label, ext, initial string, done func(string)) {
 			a.say("Cancelled.")
 			return
 		}
-		if e := strings.ToLower(filepath.Ext(name)); e != ext && !(ext == ".yaml" && (e == ".yml" || e == ".adraw")) {
+		if e := strings.ToLower(filepath.Ext(name)); e != ext && !(ext == ".adraw" && isYAML(name)) {
 			name = withExt(name, ext)
 		}
 		a.unlessExists(name, done)
@@ -1350,19 +1350,20 @@ func main() {
 			fmt.Print(usage)
 			return
 		}
+		arg = drawingPath(arg)
 		var err error
 		objs, meta, file, note, err = loadDrawing(arg)
 		switch {
 		case os.IsNotExist(err): // a new drawing under that name
 			file = arg
 			if !isYAML(arg) {
-				file = withExt(arg, ".yaml")
+				file = withExt(arg, ".adraw")
 			}
 		case err != nil:
 			fmt.Fprintln(os.Stderr, "asciidraw:", err)
 			os.Exit(1)
-		case file == "": // imported .txt or .md: offer a YAML name on first save
-			suggest = withExt(arg, ".yaml")
+		case file == "": // imported .txt or .md: offer a drawing name on first save
+			suggest = withExt(arg, ".adraw")
 		}
 	}
 
