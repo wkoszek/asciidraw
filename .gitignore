@@ -20,3 +20,13 @@
 # GoReleaser output
 /dist/
 /build/
+
+# Drawings are private: never commit them. Only the release config is YAML.
+/*.yaml
+/*.yml
+!/.goreleaser.yaml
+/*.md
+!/README.md
+!/CHANGELOG.md
+!/todo.md
+/*.txt
