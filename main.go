@@ -1337,6 +1337,9 @@ func main() {
 	var objs [][]object
 	var meta docMeta
 	file, suggest, note := "", "", ""
+	if ran, code := runCommand(os.Args[1:], os.Stdout, os.Stderr); ran {
+		os.Exit(code)
+	}
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
 		switch arg {

@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -2657,5 +2659,130 @@ func TestLibrary(t *testing.T) {
 	}
 	if exportBase("/x/card.adraw") != "/x/card" {
 		t.Fatal("an .adraw drawing exports as card.md")
+	}
+}
+
+// asciidraw export and convert work without a screen.
+func TestCommands(t *testing.T) {
+	dir := t.TempDir()
+	in := filepath.Join(dir, "n.md")
+	os.WriteFile(in, []byte("# x\n\n```\n+--+\n|hi|\n+--+\n```\n"), 0o644)
+	run := func(args ...string) (int, string, string) {
+		var out, errb bytes.Buffer
+		ran, code := runCommand(args, &out, &errb)
+		if !ran {
+			t.Fatalf("%v is a command", args)
+		}
+		return code, out.String(), errb.String()
+	}
+	if ran, _ := runCommand([]string{"mock.yaml"}, io.Discard, io.Discard); ran {
+		t.Fatal("a file name is not a command")
+	}
+
+	// convert: Markdown in, drawing out.
+	ad := filepath.Join(dir, "n.adraw")
+	if code, out, e := run("convert", in, ad); code != 0 || !strings.Contains(out, "n.adraw") {
+		t.Fatalf("convert: %d %s", code, e)
+	}
+	pp, _, _, _, err := loadDrawing(ad)
+	if err != nil || len(pp[0]) != 1 || pp[0][0].Text[1] != "|hi|" {
+		t.Fatalf("converted drawing: %v %+v", err, pp)
+	}
+	if code, _, e := run("convert", in, filepath.Join(dir, "n.png")); code != 2 || !strings.Contains(e, "asciidraw export") {
+		t.Fatalf("convert to a picture points to export: %d %s", code, e)
+	}
+
+	// export: the extension picks the format; flags override the drawing.
+	png1 := filepath.Join(dir, "n.png")
+	if code, _, e := run("export", ad, png1); code != 0 {
+		t.Fatalf("export png: %s", e)
+	}
+	img, err := png.Decode(bytes.NewReader(must(os.ReadFile(png1))))
+	cw, ch := cellSize(12)
+	if err != nil || img.Bounds().Dx() != 6*cw || img.Bounds().Dy() != 5*ch {
+		t.Fatalf("png at 12px: %v %v", err, img.Bounds())
+	}
+	jp := filepath.Join(dir, "big.jpeg")
+	if code, _, e := run("export", "--font", "24", "--theme", "dark", ad, jp); code != 0 {
+		t.Fatalf("export jpeg: %s", e)
+	}
+	if j, err := jpeg.Decode(bytes.NewReader(must(os.ReadFile(jp)))); err != nil || j.Bounds().Dx() != 6*14 {
+		t.Fatalf("jpeg at 24px: %v", err)
+	}
+	md := filepath.Join(dir, "out.md")
+	run("export", ad, md)
+	if got := string(must(os.ReadFile(md))); got != "```text\n+--+\n|hi|\n+--+\n```\n" {
+		t.Fatalf("md: %q", got)
+	}
+	for _, bad := range [][]string{
+		{"export", ad, filepath.Join(dir, "x.gif")},
+		{"export", "--theme", "blue", ad, png1},
+		{"export", "--font", "200", ad, png1},
+		{"export", ad},
+		{"convert", ad},
+	} {
+		if code, _, _ := run(bad...); code != 2 {
+			t.Fatalf("%v: exit %d, want 2", bad, code)
+		}
+	}
+	if code, _, _ := run("export", filepath.Join(dir, "none.yaml"), png1); code != 1 {
+		t.Fatal("a missing input exits 1")
+	}
+
+	// Split pages: out_page0.png, out_page1.png.
+	two := filepath.Join(dir, "two.adraw")
+	box := []object{{Kind: "box", X1: 4, Y1: 2}}
+	os.WriteFile(two, must(encodeDoc([][]object{box, box}, defaultMeta())), 0o644)
+	if code, out, e := run("export", "--pages", "split", two, filepath.Join(dir, "out.png")); code != 0 || !strings.Contains(out, "out_page1.png") {
+		t.Fatalf("split: %d %s %s", code, out, e)
+	}
+}
+
+// SVG draws a box's sides as four joined lines, letters as text, and
+// escapes them; HTML keeps the picture and its colors.
+func TestSVGAndHTML(t *testing.T) {
+	objs := []object{
+		{Kind: "box", X0: 0, Y0: 0, X1: 9, Y1: 3, Style: 1, Text: []string{"a<b"}},
+		{Kind: "text", X0: 0, Y0: 5, Text: []string{"red & bold"}, FG: "red"},
+	}
+	svg := string(renderSVG([][]object{objs}, 12, themes["light"]))
+	if !strings.HasPrefix(svg, "<svg ") || !strings.Contains(svg, ">a&lt;b</text>") || !strings.Contains(svg, ">red &amp; bold</text>") {
+		t.Fatalf("svg text:\n%s", svg)
+	}
+	d := svg[strings.Index(svg, `<path d="`)+9:]
+	d = d[:strings.Index(d, `"`)]
+	if strings.Count(svg, "<path ") != 1 || strings.Count(d, "M") != 4 {
+		t.Fatalf("one path, a line per side:\n%s", svg)
+	}
+	if !strings.Contains(svg, `fill="#cd3131"`) {
+		t.Fatal("named colors get fixed shades")
+	}
+	cw, ch := cellSize(12)
+	if !strings.Contains(svg, fmt.Sprintf(`width="%d" height="%d"`, 12*cw, 8*ch)) {
+		t.Fatal("same size as the PNG")
+	}
+
+	page := string(renderHTML([][]object{objs, objs}, 12, themes["dark"], "x<y"))
+	for _, want := range []string{"<title>x&lt;y</title>", "background:#1e1e1e", "a&lt;b", `<span style="color:#cd3131">red &amp; bold</span>`, "<p>Page 1</p>", "┌────────┐"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("html lacks %q:\n%s", want, page)
+		}
+	}
+	if strings.Contains(page, "  \n") {
+		t.Fatal("no spaces at the ends of rows")
+	}
+
+	// Both come out of export and the S settings.
+	dir := t.TempDir()
+	in := filepath.Join(dir, "d.adraw")
+	os.WriteFile(in, must(encodeYAML(objs)), 0o644)
+	for _, out := range []string{"d.svg", "d.html"} {
+		var o, e bytes.Buffer
+		if _, code := runCommand([]string{"export", in, filepath.Join(dir, out)}, &o, &e); code != 0 {
+			t.Fatalf("export %s: %s", out, e.String())
+		}
+	}
+	if _, err := fromFileExport(&fileExport{Formats: []string{"svg", "html"}}); err != nil {
+		t.Fatal(err)
 	}
 }

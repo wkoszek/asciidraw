@@ -37,6 +37,19 @@ builds:
       - { goos: openbsd, goarch: arm }
       - { goos: netbsd, goarch: arm }
     mod_timestamp: "{{ .CommitTimestamp }}" # reproducible builds
+  # Linux on 32-bit PCs, RISC-V and LoongArch. Debian and Alpine build these,
+  # so their packagers will ask.
+  - id: asciidraw-linux-extra
+    binary: asciidraw
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux]
+    goarch: ["386", riscv64, loong64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 # One macOS binary for Apple silicon and Intel, so there is one thing to sign
 # and notarize. scripts/macos-sign.sh does both; MACOS_SIGN=0 skips it.

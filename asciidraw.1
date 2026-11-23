@@ -9,6 +9,15 @@
 .Nm
 .Op Ar file
 .Nm
+.Cm export
+.Op Fl -font Ar n
+.Op Fl -theme Ar light | dark
+.Op Fl -pages Ar together | split
+.Ar file output
+.Nm
+.Cm convert
+.Ar file output
+.Nm
 .Fl v | -version
 .Nm
 .Fl h | -help
@@ -40,6 +49,50 @@ The first save then offers the same name with
 .Pa .yaml .
 .Pp
 The terminal must pass mouse clicks and drags to programs.
+.Pp
+Two commands work without opening the drawing on screen.
+Both read any
+.Ar file
+that
+.Nm
+opens, overwrite
+.Ar output
+without asking if it exists, and print the names of the files they wrote.
+.Bl -tag -width Ds
+.It Cm export
+Save the drawing as Markdown, PNG, JPEG, SVG or HTML.
+The extension of
+.Ar output
+sets the format:
+.Pa .md ,
+.Pa .png ,
+.Pa .jpg ,
+.Pa .svg
+or
+.Pa .html .
+It uses the export settings saved in the drawing, and the flags override
+them for this run only.
+.Fl -font
+is the font size in pixels for every format but Markdown.
+.Fl -theme
+is
+.Cm light
+or
+.Cm dark .
+.Fl -pages Cm together
+puts all the pages in one file.
+.Fl -pages Cm split
+writes one file per page, such as
+.Pa out_page0.png .
+Empty pages at the end get no file.
+Put the flags before
+.Ar file .
+.It Cm convert
+Save a drawing, a Markdown file or a text file as a drawing in
+.Pa .adraw
+or
+.Pa .yaml .
+.El
 .Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl v , Fl -version
@@ -223,22 +276,25 @@ Copy the current page to a new page after it, and go to the copy.
 Save the drawing as YAML.
 .It ^E
 Export the drawing in each format ticked in the export settings:
-Markdown, PNG and JPEG.
+Markdown, PNG, JPEG, SVG and HTML.
 Only Markdown is ticked at first.
 For
-.Pa mock.yaml
-it writes
+.Pa mock.yaml ,
+with every format ticked, it writes
 .Pa mock.md ,
-.Pa mock.png
+.Pa mock.png ,
+.Pa mock.jpg ,
+.Pa mock.svg
 and
-.Pa mock.jpg
+.Pa mock.html
 in the same folder.
-It asks for a name if the drawing has none, and asks before it replaces a
-file the first time in a session.
+It asks for a name if the drawing has none.
+It asks before it replaces a file it did not write earlier in the same
+session.
 Exporting does not save the drawing.
 .It S
 Open the export settings.
-Pick the formats, the font size for images (12 pixels by default), a
+Pick the formats, the font size (12 pixels by default), a
 light or dark theme, and whether a drawing of several pages goes in one
 file or in one file per page, such as
 .Pa mock_page0.png .
@@ -385,6 +441,10 @@ Two untitled sessions at once share that copy, and the last one to write it
 wins.
 .Sh EXIT STATUS
 .Ex -std
+.Cm export
+and
+.Cm convert
+exit with 2 for a wrong extension or a bad flag.
 .Sh EXAMPLES
 Start a new drawing called
 .Pa login.yaml :

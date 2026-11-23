@@ -72,17 +72,17 @@ left is mostly accounts, repos and testing on real machines.
 
 ### Ship v0.1.0
 
-- [ ] Commit the palette work that is still uncommitted. GoReleaser won't
+- [x] Commit the palette work that is still uncommitted. GoReleaser won't
       release from a dirty tree.
-- [ ] Re-tag v0.1.0 at that commit (`git tag -f -a v0.1.0 -m v0.1.0`). The
+- [x] Re-tag v0.1.0 at that commit (`git tag -f -a v0.1.0 -m v0.1.0`). The
       tag hasn't been pushed, so moving it is safe.
-- [ ] Make `wkoszek/asciidraw` public on GitHub. Set `visibility: public` in
+- [x] Make `wkoszek/asciidraw` public on GitHub. Set `visibility: public` in
       `.github/repo.diaml`.
-- [ ] `git push tig main v0.1.0`, then check that the mirror carried both the
+- [x] `git push tig main v0.1.0`, then check that the mirror carried both the
       commit and the tag to GitHub.
-- [ ] `make release`.
-- [ ] Check the release page: 15 archives, deb, rpm, apk, Arch packages,
-      checksums.txt.
+- [x] `make release`.
+- [x] Check the release page: 13 archives (not the 15 expected), deb,
+      rpm, apk, Arch packages, checksums.txt.
 
 ### Install it on real machines
 
@@ -95,8 +95,8 @@ Each of these has only been built, not run.
       `.pkg.tar.zst`. Each can run in a Docker container.
 - [ ] `go install github.com/wkoszek/asciidraw@latest`, then
       `asciidraw --version` prints v0.1.0.
-- [ ] Windows: unzip and run in Windows Terminal. Autosave copies go to
-      `%LocalAppData%\asciidraw\recover`; add that to the README.
+- [ ] Windows: unzip and run in Windows Terminal. (The README now names
+      the autosave folder, `%LocalAppData%\asciidraw\recover`.)
 - [ ] FreeBSD and OpenBSD in a VM.
 
 ### Mouse and color in other terminals
@@ -162,7 +162,7 @@ alive first: a few releases, stars, an issue tracker.
 - [ ] A source tarball with vendored modules. Debian, Fedora and nixpkgs
       build offline.
 - [ ] Sign checksums.txt (cosign or GPG) and attach an SBOM.
-- [ ] More targets: linux/riscv64, linux/386, linux/loong64. Debian and
+- [x] More targets: linux/riscv64, linux/386, linux/loong64. Debian and
       Alpine build them.
 - [ ] Run the tests on macOS and Windows, not only Linux. The Gitea runner is
       Linux only.
@@ -170,7 +170,8 @@ alive first: a few releases, stars, an issue tracker.
 ### Let people find it
 
 - [ ] A demo GIF in the README, made with `vhs`.
-- [ ] GitHub description, topics and a social preview image.
+- [x] GitHub description and topics.
+- [ ] A GitHub social preview image.
 - [ ] Decide where public bug reports go. tig is private, so either open
       GitHub issues or say where to write.
 - [ ] Post it: Show HN, r/commandline, lobste.rs, Terminal Trove, the
@@ -180,17 +181,17 @@ alive first: a few releases, stars, an issue tracker.
 
 Exports to:
 
-- [ ] SVG
-- [ ] PNG
-- [ ] JPG
+- [x] SVG
+- [x] PNG
+- [x] JPG
 - [ ] PIC (manual pages)
 - [ ] Graphviz
 - [ ] TeX/LaTeX
-- [ ] HTML
+- [x] HTML
 
 ## Sumcommands
 
 We need to add:
 
-- [ ] asciidraw export <file> <output>
-- [ ] asciidraw convert <file> <output>
+- [x] asciidraw export <file> <output>
+- [x] asciidraw convert <file> <output>

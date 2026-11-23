@@ -3,7 +3,8 @@ kind: cli
 description: >
   A terminal program for drawing ASCII mockups with the mouse: boxes, ovals,
   lines, arrows and text as objects you can select, move, resize, copy and
-  paste. Saves drawings as YAML and exports them as Markdown.
+  paste. Pages, a library of ready-made pieces, and export to Markdown, PNG
+  and JPEG.
 visibility: public
 language: go
 tags:
@@ -12,12 +13,18 @@ tags:
   - ascii
   - diagrams
   - mockups
+  - wireframe
+  - terminal
   - go
 notes: |
   Single static binary built on tcell. Objects are the source of truth: each
   frame composes them onto a character grid that also records which object
   drew each cell, for hit testing. ^S writes YAML (styles stored by name),
-  ^E writes a fenced Markdown copy. y/d/p/x and ^C/^X/^V copy, cut and paste,
+  ^E writes Markdown, PNG and/or JPEG per the S settings (image.go draws
+  cells with Go Mono and pixel line art; PNGs are paletted). L opens a
+  library: builtin pieces embedded from library/*.adraw, custom ones from
+  ~/.config/asciidraw/library. `asciidraw export` and `convert` run
+  without a screen (cli.go). y/d/p/x and ^C/^X/^V copy, cut and paste,
   using the system clipboard: pbcopy, wl-copy/xclip/xsel, PowerShell, or
   OSC 52 over SSH (sysclip.go). Releases go through GoReleaser to GitHub
   Releases, a cask in wkoszek/homebrew-tap, and deb/rpm/apk/arch packages.

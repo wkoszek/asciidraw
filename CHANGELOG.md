@@ -26,6 +26,16 @@ before you tag.
   `$XDG_CONFIG_HOME/asciidraw/library/` if that is set.
 - asciidraw now opens and saves `.adraw` files. They hold the same YAML
   as `.yaml` files.
+- `asciidraw export <file> <output>` saves a drawing as Markdown, PNG or
+  JPEG without opening it. The output's extension sets the format.
+  `--font`, `--theme` and `--pages` override the saved export settings
+  for this run.
+- `asciidraw convert <file> <output>` writes a drawing (`.adraw` or
+  `.yaml`) from a drawing, a Markdown file or a text file.
+- More Linux builds: 32-bit x86 (386), RISC-V and LoongArch.
+- SVG and HTML export, in the `S` settings and in `asciidraw export`.
+  SVG draws lines as shapes, so they stay sharp at any zoom. HTML puts
+  the picture in a `<pre>` block, with each shape in its own color.
 - PNG and JPEG export. `S` opens the export settings. There you pick the
   formats ^E writes and the font size for images, 12px by default.
 - The settings also pick a light or dark theme for images, and one file

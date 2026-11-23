@@ -14,7 +14,7 @@ import (
 // format that is ticked. They are saved with the drawing.
 
 type exportSettings struct {
-	Formats []string // "md", "png", "jpg", in that order
+	Formats []string // "md", "png", "jpg", "svg", "html", in that order
 	Font    int      // pixels; sets the size of a PNG or JPEG
 	Theme   string   // "light" or "dark", for images
 	Split   bool     // a drawing with several pages: one file per page
@@ -22,6 +22,7 @@ type exportSettings struct {
 
 var exportFormats = []struct{ key, ext, name string }{
 	{"md", ".md", "Markdown"}, {"png", ".png", "PNG"}, {"jpg", ".jpg", "JPEG"},
+	{"svg", ".svg", "SVG"}, {"html", ".html", "HTML"},
 }
 
 var fontSizes = []int{10, 12, 14, 16, 20, 24}
@@ -74,7 +75,7 @@ func fromFileExport(f *fileExport) (exportSettings, error) {
 		}
 		for _, k := range f.Formats {
 			if !slices.ContainsFunc(exportFormats, func(ff struct{ key, ext, name string }) bool { return ff.key == k }) {
-				return e, fmt.Errorf("export: unknown format %q; use md, png or jpg", k)
+				return e, fmt.Errorf("export: unknown format %q; use md, png, jpg, svg or html", k)
 			}
 		}
 	}
@@ -105,7 +106,7 @@ func fromFileExport(f *fileExport) (exportSettings, error) {
 // exportBase is a name with any export or drawing extension taken off.
 func exportBase(name string) string {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".png", ".jpg", ".jpeg", ".yaml", ".yml", ".adraw", ".txt":
+	case ".md", ".png", ".jpg", ".jpeg", ".svg", ".html", ".htm", ".yaml", ".yml", ".adraw", ".txt":
 		return strings.TrimSuffix(name, filepath.Ext(name))
 	}
 	return name
@@ -122,13 +123,17 @@ type exportFile struct {
 // One page, or pages kept together, gives mock.md; split pages give
 // mock_page0.md, mock_page1.md and so on.
 func (a *app) exportPlan(base string) []exportFile {
-	pages := trimPages(a.allPages())
+	return planExports(a.allPages(), a.exp, base)
+}
+
+func planExports(pages [][]object, e exportSettings, base string) []exportFile {
+	pages = trimPages(pages)
 	var out []exportFile
 	for _, f := range exportFormats {
-		if !a.exp.has(f.key) {
+		if !e.has(f.key) {
 			continue
 		}
-		if !a.exp.Split || len(pages) == 1 {
+		if !e.Split || len(pages) == 1 {
 			out = append(out, exportFile{base + f.ext, f.key, pages, 0})
 			continue
 		}
@@ -216,7 +221,10 @@ func (a *app) writeExports(base string) {
 	a.say(msg)
 }
 
-func (a *app) exportData(f exportFile) ([]byte, error) {
+func (a *app) exportData(f exportFile) ([]byte, error) { return exportBytes(f, a.exp) }
+
+// exportBytes makes one export file's contents.
+func exportBytes(f exportFile, e exportSettings) ([]byte, error) {
 	if f.format == "md" {
 		var pics []string
 		for _, objs := range f.pages {
@@ -224,7 +232,14 @@ func (a *app) exportData(f exportFile) ([]byte, error) {
 		}
 		return []byte(markdownPages(pics)), nil
 	}
-	img := renderPages(f.pages, a.exp.Font, themes[a.exp.Theme])
+	switch f.format {
+	case "svg":
+		return renderSVG(f.pages, e.Font, themes[e.Theme]), nil
+	case "html":
+		title := strings.TrimSuffix(filepath.Base(f.path), filepath.Ext(f.path))
+		return renderHTML(f.pages, e.Font, themes[e.Theme], title), nil
+	}
+	img := renderPages(f.pages, e.Font, themes[e.Theme])
 	if f.format == "png" {
 		return encodePNG(img)
 	}
@@ -410,7 +425,7 @@ func (a *app) settingsKey(ev *tcell.EventKey) {
 const setLabelW = 8 // "  Write " and so on, before the choices
 
 func (a *app) settingsBox() (x0, y0, w, h int) {
-	w, h = 60, 12
+	w, h = 72, 12
 	sw, sh := a.s.Size()
 	return max((sw-w)/2, 0), max((sh-2-h)/2, 0), w, h
 }

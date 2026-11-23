@@ -52,6 +52,35 @@ asciidraw mock.yaml    # open a drawing, or start a new one under that name
 asciidraw notes.md     # bring in a picture from Markdown or plain text
 ```
 
+Two commands work without opening the drawing on screen:
+
+```sh
+asciidraw export mock.yaml mock.png        # also .md, .jpg, .svg or .html
+asciidraw export --font 16 --theme dark mock.yaml mock.png
+asciidraw convert notes.md notes.adraw     # also .yaml
+```
+
+`export` saves the drawing as Markdown, PNG, JPEG, SVG or HTML. The output's
+extension sets the format. It uses the export settings saved in the
+drawing (see Export). The flags override them for this run only, and the
+drawing file stays the same. Put the flags before the file names:
+
+- `--font` is the font size in pixels for every format but Markdown.
+  The default is 12.
+- `--theme` is `light` or `dark`.
+- `--pages together` puts all the pages in one file. `--pages split`
+  writes one file per page, named after the page: `mock.png` becomes
+  `mock_page0.png`, `mock_page1.png` and so on. Page names run from `0`
+  to `9`, then `a` to `z`, then `A` to `Z`. Empty pages at the end get no
+  file. If only one page is left, the file keeps the plain name.
+
+Use `convert` to turn a Markdown or text file into a drawing, or to
+switch a drawing between `.yaml` and `.adraw`.
+
+Both commands overwrite the output without asking, and print the names
+of the files they wrote. They exit with 0 when they work, 1 when a file
+can't be read or written, and 2 for a wrong extension or a bad flag.
+
 In this README, `^T` means Ctrl+T.
 
 ## Drawing
@@ -631,8 +660,9 @@ it, and says so. Press ^S to keep the changes. Saving deletes the copy.
 Quitting with ^Q twice, or starting over with ^N twice, throws the unsaved
 changes away for good and deletes the copy too.
 
-On macOS the copies live in `~/Library/Caches/asciidraw/recover/`, and on
-Linux in `~/.cache/asciidraw/recover/`. An untitled drawing has one copy,
+On macOS the copies live in `~/Library/Caches/asciidraw/recover/`, on
+Linux and the BSDs in `~/.cache/asciidraw/recover/`, and on Windows in
+`%LocalAppData%\asciidraw\recover\`. An untitled drawing has one copy,
 `untitled.yaml`, which comes back the next time you start asciidraw with no
 file. Two untitled sessions at once share that copy, and the last one to
 write it wins.
@@ -691,9 +721,10 @@ file if there is none. The first save then offers the same name with
 ## Export
 
 **^E** exports the drawing in each format ticked in the export settings:
-Markdown, PNG and JPEG. Only Markdown is ticked at first. For `mock.yaml`
-it writes `mock.md`, `mock.png` and `mock.jpg` in the same folder. If the
-drawing has no name yet, it asks for one.
+Markdown, PNG, JPEG, SVG and HTML. Only Markdown is ticked at first. For
+`mock.yaml`, with every format ticked, it writes `mock.md`, `mock.png`,
+`mock.jpg`, `mock.svg` and `mock.html` in the same folder. If the drawing has no name yet, it asks
+for one.
 
 If a file it would write is already there, ^E asks before replacing it.
 Files that ^E wrote earlier in the same session are replaced without
@@ -708,9 +739,10 @@ click.
 
 - **Write** picks the formats. Press Space to tick or untick the one under
   the cursor. You can't untick the last one.
-- **Font** is the font size for PNG and JPEG: 10, 12, 14, 16, 20 or 24
-  pixels. 12 is the default. At 12, each character takes 7 by 15 pixels.
-  The window shows the image size of the page you're on.
+- **Font** is the font size for every format but Markdown: 10, 12, 14,
+  16, 20 or 24 pixels. 12 is the default. In PNG, JPEG and SVG, each
+  character takes 7 by 15 pixels at 12. The settings window shows the
+  image size of the page you're on.
 - **Theme** is light (dark text on white) or dark (light text on near
   black).
 - **Pages** says what to do with a drawing of several pages. "One file"
@@ -724,22 +756,33 @@ The settings are saved in the drawing file, under `export`, once you
 change them from the defaults. Changing them marks the drawing as
 changed, so press ^S to keep them.
 
-When a Markdown file holds several pages, each page gets its own code
-block, with a line such as `Page 2` above it. When an image holds
-several pages, they sit one under another with a thin line between them.
-Empty pages at the end are left out.
+When a Markdown or HTML file holds several pages, each page gets its own
+block, with its name above it: `Page 0`, `Page 1` and so on. When a PNG, JPEG or SVG
+holds several pages, they sit one under another with a thin line between
+them. Empty pages at the end are left out.
 
-PNG is the format to pick for small files. A drawing that fills the
-screen usually makes a PNG of a few kilobytes. A JPEG of the same
-drawing is usually several times bigger, because JPEG is made for
-photos, not lines and letters. A JPEG with no color in it is saved in
+PNG and SVG make small files. A drawing that fills the screen usually
+makes a PNG or an SVG of a few kilobytes. A JPEG of the same drawing is
+usually several times bigger, because JPEG is made for photos, not lines
+and letters. A JPEG with no color in it is saved in
 grays, which makes it a little smaller.
 
-Letters use Go Mono, a font built into asciidraw, so an image looks the
-same on every computer. Box lines, corners, shades and arrowheads are
-drawn as shapes, so lines meet with no gaps. The ascii style's `-`, `|`
+In PNG and JPEG, letters use Go Mono, a font built into asciidraw, so an
+image looks the same on every computer. Box lines, corners, shades, and
+the triangles and dots widgets use are drawn as shapes, so lines meet
+with no gaps. A line's arrowhead, such as `>`, is a letter. The ascii style's `-`, `|`
 and `+` are letters, like the rest of the text. Named colors like red
 get one fixed shade in images.
+
+SVG draws the same shapes, so they stay sharp at any zoom. Letters use
+the viewer's monospace font. Each group of letters is spaced to fill its
+columns, so the columns line up in any font.
+
+HTML puts the picture in a `<pre>` block and keeps its colors. The
+browser's monospace font draws everything, lines included, so how well
+the lines meet depends on that font. Open the file in a browser. To put
+the picture in a page of your own, copy the `<style>` line along with the
+`<pre>` block, since the font and theme colors live there.
 
 ## Cmd keys in Ghostty
 
