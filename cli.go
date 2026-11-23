@@ -78,6 +78,11 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "asciidraw:", err)
 		return 1
 	}
+	for i := range drawing { // hidden layers aren't exported
+		if i < len(meta.Layers) {
+			drawing[i] = visible(drawing[i], meta.Layers[i].hidden)
+		}
+	}
 	e := meta.Export
 	e.Formats = []string{format}
 	if *font != 0 {

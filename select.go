@@ -67,7 +67,8 @@ func (a *app) groupOf(i int) []int {
 	}
 	var out []int
 	for j, o := range a.objs {
-		if o.Group == g {
+		// Members on hidden or locked layers stay put; see layers.go.
+		if o.Group == g && (j == i || a.pickable(j)) {
 			out = append(out, j)
 		}
 	}
@@ -113,9 +114,11 @@ func (a *app) toggleSel(i int) {
 }
 
 func (a *app) selectAll() {
-	all := make([]int, len(a.objs))
-	for i := range all {
-		all[i] = i
+	var all []int
+	for i := range a.objs {
+		if a.pickable(i) { // not shapes on hidden or locked layers
+			all = append(all, i)
+		}
 	}
 	a.setSelection(all, len(all)-1)
 	a.say(fmt.Sprintf("Selected all %d shapes.", len(all)))
@@ -135,7 +138,7 @@ func (a *app) selectIn(x0, y0, x1, y1 int, add bool) {
 	found := 0
 	for i, o := range a.objs {
 		x, y, w, h := o.bounds()
-		if x >= x0 && y >= y0 && x+w-1 <= x1 && y+h-1 <= y1 {
+		if a.pickable(i) && x >= x0 && y >= y0 && x+w-1 <= x1 && y+h-1 <= y1 {
 			found++
 			for _, j := range a.groupOf(i) {
 				pick[j] = true

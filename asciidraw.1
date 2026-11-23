@@ -278,6 +278,43 @@ Go to the page before.
 .It +
 Copy the current page to a new page after it, and go to the copy.
 .El
+.Ss Layers
+Each page has up to 62 layers, named like pages:
+.Ql 0
+to
+.Ql 9 ,
+then
+.Ql a
+to
+.Ql z ,
+then
+.Ql A
+to
+.Ql Z .
+Every shape sits on one layer,
+.Ql 0
+unless you move it, and higher layers draw on top of lower ones.
+Shapes you draw, paste or add from the library go on the current layer.
+The
+.Sq L
+column in the panel shows each shape's layer.
+Each key below takes a layer name as a second key; Esc cancels.
+.Bl -tag -width "K name"
+.It l Ar name
+Move the selected shapes to that layer, on top of its other shapes, and
+make it the current layer.
+.It H Ar name
+Hide or show a layer.
+A hidden layer isn't drawn, can't be clicked and isn't exported.
+.It K Ar name
+Lock or unlock a layer.
+A locked layer is drawn and exported, but clicks go through it to the
+shapes below.
+.El
+.Pp
+^Z undoes moving shapes to a layer.
+It doesn't undo hiding or locking, but both are saved with the drawing.
+The status bar shows the current layer and the hidden and locked ones.
 .Ss Files and view
 .Bl -tag -width "PgUp, PgDn"
 .It ^S

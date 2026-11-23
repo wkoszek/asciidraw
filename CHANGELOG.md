@@ -35,6 +35,11 @@ before you tag.
 - `asciidraw convert <file> <output>` writes a drawing (`.adraw` or
   `.yaml`) from a drawing, a Markdown file or a text file.
 - More Linux builds: 32-bit x86 (386), RISC-V and LoongArch.
+- Layers. Each page has up to 62 layers, named `0`-`9`, `a`-`z`,
+  `A`-`Z`. Press `l`, then a layer name, to move the selection there. `H`
+  hides or shows a layer, and `K` locks or unlocks it. Hidden layers
+  aren't drawn or exported; clicks go through locked ones. The panel's
+  `L` column shows each shape's layer.
 - SVG and HTML export, in the `S` settings and in `asciidraw export`.
   SVG draws lines as shapes, so they stay sharp at any zoom. HTML puts
   the picture in a `<pre>` block, with each shape in its own color.

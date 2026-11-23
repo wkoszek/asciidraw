@@ -2824,3 +2824,168 @@ func TestDrawingPath(t *testing.T) {
 		t.Fatal("a drawing name stays")
 	}
 }
+
+// Layers: l moves shapes, H hides, K locks. Higher layers draw on top;
+// hidden ones aren't drawn, picked or exported; locked ones are drawn and
+// exported, but clicks go through them.
+func TestLayers(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4) // box A, layer 0
+	drag2(a, 5, 2, 15, 6) // box B, layer 0, on top of A
+	ctrl(a, tcell.KeyEscape)
+	a.sel = 0 // A
+	typeStr(a, "l2")
+	if a.objs[1].Layer != 2 || a.objs[1].X0 != 0 || a.objs[0].X0 != 5 || a.lay.active != 2 {
+		t.Fatalf("A on layer 2, now after B: %+v", a.objs)
+	}
+	if !a.isSel(1) {
+		t.Fatal("A stays selected at its new place")
+	}
+	a.render()
+	if !strings.Contains(screenText(a), "layer 2") {
+		t.Fatal("the status bar shows the layer")
+	}
+	// A new shape goes on the layer new shapes go on: 2.
+	ctrl(a, tcell.KeyEscape)
+	drag2(a, 30, 0, 40, 4)
+	if a.objs[2].Layer != 2 {
+		t.Fatalf("new shape on layer 2: %+v", a.objs[2])
+	}
+	// Moving is undoable.
+	ctrl(a, tcell.KeyCtrlZ)
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[0].Layer != 0 || a.objs[1].Layer != 0 || a.objs[0].X0 != 0 {
+		t.Fatalf("undo puts A back on layer 0: %+v", a.objs)
+	}
+	ctrl(a, tcell.KeyCtrlY)
+	ctrl(a, tcell.KeyCtrlY)
+
+	// Hide layer 2: A and the new box vanish, can't be picked, aren't exported.
+	ctrl(a, tcell.KeyEscape)
+	undos := len(a.undo)
+	typeStr(a, "H2")
+	if len(a.undo) != undos || !a.dirty {
+		t.Fatal("hiding isn't an undo step, but it is a change to save")
+	}
+	a.render()
+	if a.scene().get(0, 0) != ' ' {
+		t.Fatal("A isn't drawn")
+	}
+	if a.pickScene().owner(0, 0) != -1 {
+		t.Fatal("A can't be clicked")
+	}
+	ctrl(a, tcell.KeyCtrlA)
+	if len(a.selected()) != 1 {
+		t.Fatalf("^A skips hidden shapes: %v", a.selected())
+	}
+	ctrl(a, tcell.KeyEscape)
+	for i := 0; i < 3; i++ {
+		ctrl(a, tcell.KeyTab)
+		if !a.pickable(a.sel) {
+			t.Fatal("Tab skips hidden shapes")
+		}
+	}
+	pages := a.visiblePages()
+	if len(pages[0]) != 1 {
+		t.Fatalf("export leaves out layer 2: %d shapes", len(pages[0]))
+	}
+	typeStr(a, "H2")
+
+	// Lock layer 0: B is drawn but clicks go through it.
+	typeStr(a, "K0")
+	if a.pickScene().owner(6, 6) != -1 || a.scene().owner(6, 6) != 0 {
+		t.Fatal("B is drawn, but not pickable")
+	}
+	if len(a.visiblePages()[0]) != 3 {
+		t.Fatal("locked layers export")
+	}
+	a.render()
+	if !strings.Contains(screenText(a), "lock:0") {
+		t.Fatal("the status bar shows the lock")
+	}
+
+	// Saved and read back: layers, hidden, locked, the active layer.
+	typeStr(a, "H5")
+	path := filepath.Join(t.TempDir(), "l.adraw")
+	a.write(path)
+	yml := string(must(os.ReadFile(path)))
+	for _, want := range []string{"layer: \"2\"", "hidden: \"5\"", "locked: \"0\"", "active: \"2\""} {
+		if !strings.Contains(yml, want) {
+			t.Fatalf("yaml lacks %s:\n%s", want, yml)
+		}
+	}
+	pp, m, _, _, err := loadDrawing(path)
+	if err != nil || len(m.Layers) != 1 || m.Layers[0] != a.lay || pp[0][1].Layer != 2 {
+		t.Fatalf("reload: %v %+v", err, m.Layers)
+	}
+	// Shapes come back in layer order even if the file mixes them up.
+	objs, _, err := decodeDoc([]byte("pages:\n  - objects:\n      - kind: box\n        layer: \"3\"\n      - kind: text\n        text: [hi]\n"))
+	if err != nil || objs[0][0].Kind != "text" || objs[0][1].Layer != 3 {
+		t.Fatalf("layer order on load: %v %+v", err, objs)
+	}
+	for _, bad := range []string{
+		"pages:\n  - objects:\n      - kind: box\n        layer: \"?\"\n",
+		"pages:\n  - hidden: \"2!\"\n    objects: []\n",
+	} {
+		if _, _, err := decodeDoc([]byte(bad)); err == nil {
+			t.Fatalf("bad layer accepted: %q", bad)
+		}
+	}
+
+	// Layers are per page: a new page starts with none hidden or locked.
+	typeStr(a, ".")
+	if a.lay != (layerState{}) {
+		t.Fatalf("new page: %+v", a.lay)
+	}
+	typeStr(a, ",")
+	if a.lay.locked != layerBit(0) {
+		t.Fatal("the first page keeps its lock")
+	}
+
+	// A key that isn't a layer name cancels.
+	typeStr(a, "l")
+	ctrl(a, tcell.KeyEscape)
+	if a.layerCmd != 0 {
+		t.Fatal("Esc cancels")
+	}
+}
+
+// A locked layer's box can't be typed into, and its group-mates on other
+// layers don't drag it into the selection.
+func TestLockedLayerHoles(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)  // box on layer 0
+	drag2(a, 20, 0, 30, 4) // box on layer 0
+	ctrl(a, tcell.KeyEscape)
+	a.setSelection([]int{0, 1}, 1)
+	typeStr(a, "g") // one group
+	a.sel = 0
+	a.setSelection([]int{0}, 0)
+	typeStr(a, "l1") // first box to layer 1; its group-mate stays on 0
+	ctrl(a, tcell.KeyEscape)
+	typeStr(a, "K0")
+	click(a, 24, 2) // inside the locked box
+	if a.typing && a.edit >= 0 && a.objs[a.edit].Kind == "box" {
+		t.Fatal("a click in a locked box doesn't type its label")
+	}
+	ctrl(a, tcell.KeyEscape)
+	ctrl(a, tcell.KeyTab)
+	for _, i := range a.selected() {
+		if !a.pickable(i) {
+			t.Fatalf("Tab brought in a locked group-mate: %v", a.selected())
+		}
+	}
+}
+
+func TestHideCurrentLayerWarns(t *testing.T) {
+	a := testApp(t)
+	typeStr(a, "H0")
+	if !strings.Contains(a.msg, "New shapes still go on it") {
+		t.Fatalf("hiding the current layer says so: %q", a.msg)
+	}
+	typeStr(a, "H0")
+	typeStr(a, "K3")
+	if strings.Contains(a.msg, "New shapes") {
+		t.Fatalf("locking another layer doesn't: %q", a.msg)
+	}
+}

@@ -368,6 +368,47 @@ shape lower in the list covers the ones above it.
 - Drag a row down in the panel to put its shape just below the row you drop
   it on, or up to put it just above.
 
+### Layers
+
+Each page has up to 62 layers, named like pages: `0` to `9`, then `a` to
+`z`, then `A` to `Z`. Every shape sits on one layer, `0` unless you move
+it. Higher layers draw on top of lower ones, so a shape on layer `2`
+covers one on layer `0`. Within a layer, shapes stack as described under
+Stacking order: `]` brings a shape to the front of its own layer, and `[`
+sends it to the back.
+
+One layer is the current layer, `0` at first. Shapes you draw, paste or
+add from the library go on it. ^D keeps each copy on the layer of the
+shape it copies.
+
+Each key below takes a layer name as a second key. For example, `l2`
+means press `l`, then `2`. Esc cancels.
+
+- **l** moves the selected shapes to that layer, on top of its other
+  shapes, and makes it the current layer. With nothing selected, it only
+  changes the current layer.
+- **H** hides a layer, or shows it again. A hidden layer isn't drawn,
+  and you can't click its shapes. Exports leave it out.
+- **K** locks a layer, or unlocks it. A locked layer is drawn and
+  exported, but clicks go through it to the shapes below. Select all
+  (^A), Tab and the selection box skip its shapes, and so does a click on
+  a group with members on it. Lock a background so you can draw over it
+  without moving it by accident.
+
+If the current layer is hidden or locked, asciidraw says so: new shapes
+there would be invisible, or impossible to pick.
+
+In the panel, the `L` column shows each shape's layer. A row is dim when
+its shape's layer is hidden, and the layer name is red when it is
+locked. You can't select those rows. The status bar shows the current
+layer and which layers are hidden or locked, such as
+`layer 2 hide:5 lock:0`, whenever any of that differs from plain layer
+`0`.
+
+^Z undoes moving shapes to a layer. It doesn't undo hiding or locking,
+but both are saved with the drawing. Each page has its own layers:
+hiding layer `2` on one page leaves the other pages alone.
+
 ### Fill
 
 The Fill tool shades a rectangle: drag one, as you would a box. A new fill
@@ -569,6 +610,9 @@ When you are not typing, these letters work as commands:
 | `a` | align or spread out the selected shapes, then press a second key (see Align and spread out) | |
 | `>` / `<` | go to the next page / the page before (see Pages) | `.` / `,` |
 | `+` | copy this page to a new page after it, and go there | |
+| `l` + name | put the selection on a layer, such as `l2` (see Layers) | |
+| `H` + name | hide or show a layer | |
+| `K` + name | lock or unlock a layer | |
 
 They come from vim. Press Esc first if you are typing.
 

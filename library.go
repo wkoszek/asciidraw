@@ -139,6 +139,7 @@ func (a *app) insertPiece(it libItem) {
 	solo := len(src) == 1
 	for i := range src {
 		src[i].move(-x0, -y0)
+		src[i].Layer = a.lay.active
 		if !solo {
 			src[i].Group = 1 // one piece moves as one; addCopies gives it a fresh group
 		}

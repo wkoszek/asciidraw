@@ -112,7 +112,8 @@ func (a *app) renderPanel() {
 			}
 		}
 	}
-	a.text(x0+2, 0, fmt.Sprintf(" Objects (%d) ", len(a.objs)), frame.Bold(true))
+	a.s.SetContent(x0+4, 0, 'L', nil, frame.Bold(true)) // heads the layer column
+	a.text(x0+6, 0, fmt.Sprintf(" Objects (%d) ", len(a.objs)), frame.Bold(true))
 	if a.panelTop > 0 {
 		a.s.SetContent(sw-3, 0, '▲', nil, frame)
 	}
@@ -142,10 +143,19 @@ func (a *app) renderPanel() {
 		if g := a.objs[i].Group; g != 0 {
 			tag = fmt.Sprintf("g%-2d", g)
 		}
-		a.text(x0+1, 1+r, fit(fmt.Sprintf("%2d %s %s", i+1, tag, a.objs[i].label()), inner), st)
-		if o := a.objs[i]; o.FG != "" || o.BG != "" { // a swatch of its colors
+		o := a.objs[i]
+		bit := layerBit(o.Layer)
+		if a.lay.hidden&bit != 0 {
+			st = st.Dim(true).Italic(true)
+		}
+		a.text(x0+1, 1+r, fit(fmt.Sprintf("%2d %s %s %s", i+1, pageChar(o.Layer), tag, o.label()), inner), st)
+		if o.FG != "" || o.BG != "" { // a swatch of its colors
 			sw := tcell.StyleDefault.Foreground(colorOf(o.FG)).Background(colorOf(o.BG))
 			a.s.SetContent(x0+3, 1+r, '■', nil, sw)
+		}
+		// The L column: the shape's layer, red when the layer is locked.
+		if a.lay.locked&bit != 0 {
+			a.s.SetContent(x0+4, 1+r, []rune(pageChar(o.Layer))[0], nil, st.Foreground(tcell.ColorRed).Bold(true))
 		}
 	}
 	if h >= 8 {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,15 +27,19 @@ type fileDoc struct {
 	Objects []fileObject `yaml:"objects,omitempty"` // version 1 files: one page, no pages list
 }
 
-// docMeta is what a drawing keeps besides its pages.
+// docMeta is what a drawing keeps besides its pages' shapes.
 type docMeta struct {
 	Pal    []string
 	Export exportSettings
+	Layers []layerState // one per page; missing means nothing hidden or locked
 }
 
-func defaultMeta() docMeta { return docMeta{slices.Clone(defaultPal), defaultExport()} }
+func defaultMeta() docMeta { return docMeta{Pal: slices.Clone(defaultPal), Export: defaultExport()} }
 
 type filePage struct {
+	Hidden  string       `yaml:"hidden,omitempty"` // hidden layers, such as "2a"
+	Locked  string       `yaml:"locked,omitempty"` // locked layers
+	Active  string       `yaml:"active,omitempty"` // the layer new shapes go on, if not 0
 	Objects []fileObject `yaml:"objects"`
 }
 
@@ -57,6 +62,7 @@ type fileObject struct {
 	FG    string      `yaml:"fg,omitempty"`
 	BG    string      `yaml:"bg,omitempty"`
 	Place string      `yaml:"place,omitempty"` // a label's position, like "top left"; none means centered
+	Layer string      `yaml:"layer,omitempty"` // 0-9, a-z or A-Z; none means 0
 }
 
 // fileAnchor is an attached line end: the shape's id, the side (left,
@@ -125,8 +131,16 @@ func encodeDoc(pages [][]object, m docMeta) ([]byte, error) {
 	if m.Pal != nil && !slices.Equal(m.Pal, defaultPal) {
 		doc.Palette = m.Pal
 	}
-	for _, objs := range trimPages(pages) {
-		doc.Pages = append(doc.Pages, filePage{Objects: encodeObjects(objs)})
+	for i, objs := range trimPages(pages) {
+		fp := filePage{Objects: encodeObjects(objs)}
+		if i < len(m.Layers) {
+			l := m.Layers[i]
+			fp.Hidden, fp.Locked = layerNames(l.hidden), layerNames(l.locked)
+			if l.active != 0 {
+				fp.Active = pageChar(l.active)
+			}
+		}
+		doc.Pages = append(doc.Pages, fp)
 	}
 	var buf bytes.Buffer
 	buf.WriteString("# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export.\n")
@@ -143,6 +157,9 @@ func encodeObjects(objs []object) []fileObject {
 	out := []fileObject{}
 	for _, o := range objs {
 		f := fileObject{Kind: o.Kind, Group: o.Group, ID: o.ID, From: toFileAnchor(o.From), To: toFileAnchor(o.To), FG: o.FG, BG: o.BG}
+		if o.Layer > 0 && o.Layer < maxLayers {
+			f.Layer = pageChar(o.Layer)
+		}
 		if o.Kind == "text" {
 			f.X0, f.Y0, f.Text = ptr(o.X0), ptr(o.Y0), o.Text
 		} else {
@@ -177,7 +194,30 @@ func decodeYAML(data []byte) ([]object, error) {
 // palette gets the default one; a short one is filled up from it.
 func decodeDoc(data []byte) ([][]object, docMeta, error) {
 	pages, pal, ex, err := decodeParts(data)
-	return pages, docMeta{pal, ex}, err
+	if err != nil {
+		return nil, docMeta{}, err
+	}
+	m := docMeta{Pal: pal, Export: ex}
+	var doc fileDoc
+	yaml.Unmarshal(data, &doc) // read already, without error
+	for n, p := range doc.Pages {
+		var l layerState
+		var e1, e2 error
+		l.hidden, e1 = parseLayerNames(p.Hidden)
+		l.locked, e2 = parseLayerNames(p.Locked)
+		if err := errors.Join(e1, e2); err != nil {
+			return nil, docMeta{}, fmt.Errorf("page %s: %w", pageChar(n), err)
+		}
+		if p.Active != "" {
+			a, ok := layerOf([]rune(p.Active)[0])
+			if !ok || len([]rune(p.Active)) != 1 {
+				return nil, docMeta{}, fmt.Errorf("page %s: active layer %q; layers are 0-9, a-z and A-Z", pageChar(n), p.Active)
+			}
+			l.active = a
+		}
+		m.Layers = append(m.Layers, l)
+	}
+	return pages, m, nil
 }
 
 func decodeParts(data []byte) ([][]object, []string, exportSettings, error) {
@@ -229,6 +269,8 @@ func decodePages(data []byte) ([][]object, []string, fileDoc, error) {
 			}
 			return nil, nil, doc, err
 		}
+		// Shapes keep to layer order, whatever order the file lists them in.
+		slices.SortStableFunc(objs, func(x, y object) int { return x.Layer - y.Layer })
 		pages = append(pages, objs)
 	}
 	return pages, pal, doc, nil
@@ -246,6 +288,13 @@ func decodeObjects(fs []fileObject) ([]object, error) {
 			*c = name
 		}
 		o.FG, o.BG = f.FG, f.BG
+		if f.Layer != "" {
+			l, ok := layerOf([]rune(f.Layer)[0])
+			if !ok || len([]rune(f.Layer)) != 1 {
+				return nil, fmt.Errorf("object %d: layer %q; layers are 0-9, a-z and A-Z", i+1, f.Layer)
+			}
+			o.Layer = l
+		}
 		var err error
 		if o.From, err = fromFileAnchor(f.From); err == nil {
 			o.To, err = fromFileAnchor(f.To)

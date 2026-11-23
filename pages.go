@@ -14,6 +14,7 @@ import (
 type page struct {
 	objs       []object
 	undo, redo [][]object
+	lay        layerState
 }
 
 // allPages gives every page's shapes, the one on screen included.
@@ -36,24 +37,34 @@ func (a *app) setPages(pp [][]object) {
 		a.pages[i].objs = objs
 	}
 	a.page = 0
-	a.objs, a.undo, a.redo = a.pages[0].objs, nil, nil
+	a.objs, a.undo, a.redo, a.lay = a.pages[0].objs, nil, nil, layerState{}
+}
+
+// setLayers gives each page its layer state, as read from a file.
+func (a *app) setLayers(ls []layerState) {
+	for i := range a.pages {
+		if i < len(ls) {
+			a.pages[i].lay = ls[i]
+		}
+	}
+	a.lay = a.pages[a.page].lay
 }
 
 func (a *app) gotoPage(n int) {
 	a.stopTyping()
 	a.forget()
 	a.drag = nil
-	a.pages[a.page] = page{a.objs, a.undo, a.redo}
+	a.pages[a.page] = page{a.objs, a.undo, a.redo, a.lay}
 	// Going back from an untouched empty page at the end drops it, so the
 	// page count only counts pages you used. One with undo or redo steps
 	// stays, so nothing you could get back is lost.
 	last := len(a.pages) - 1
-	if n < a.page && a.page == last && last > 0 && len(a.objs) == 0 && len(a.undo) == 0 && len(a.redo) == 0 {
+	if n < a.page && a.page == last && last > 0 && len(a.objs) == 0 && len(a.undo) == 0 && len(a.redo) == 0 && a.lay == (layerState{}) {
 		a.pages = a.pages[:last]
 	}
 	a.page = n
 	p := a.pages[n]
-	a.objs, a.undo, a.redo = p.objs, p.undo, p.redo
+	a.objs, a.undo, a.redo, a.lay = p.objs, p.undo, p.redo, p.lay
 }
 
 // Each page has a one-character name: 0-9, then a-z, then A-Z. That caps a
@@ -164,8 +175,8 @@ func (a *app) clonePage() {
 	}
 	a.stopTyping()
 	from := a.page + 1
-	a.pages[a.page] = page{a.objs, a.undo, a.redo}
-	a.pages = append(a.pages[:from], append([]page{{objs: cloneObjs(a.objs)}}, a.pages[from:]...)...)
+	a.pages[a.page] = page{a.objs, a.undo, a.redo, a.lay}
+	a.pages = append(a.pages[:from], append([]page{{objs: cloneObjs(a.objs), lay: a.lay}}, a.pages[from:]...)...)
 	a.gotoPage(from)
 	a.dirty = true
 	a.say(fmt.Sprintf("Copied page %s to a new %s.", pageChar(from-1), a.pageName()))

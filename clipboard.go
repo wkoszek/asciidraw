@@ -69,6 +69,9 @@ func (a *app) paste() {
 	before := cloneObjs(a.objs)
 	x, y := a.mx, a.my
 	added := a.addCopies(a.clip, x, y)
+	for _, i := range added { // pasted shapes land on the layer new shapes go on
+		a.objs[i].Layer = a.lay.active
+	}
 	a.setSelection(added, added[len(added)-1])
 	a.commit(before)
 	a.say(fmt.Sprintf("Pasted %s at %d,%d.", a.describe(added), x, y))

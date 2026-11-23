@@ -25,6 +25,7 @@ type object struct {
 	BG    string // background color by name
 
 	HAlign, VAlign int // where a box's or oval's label sits: -1 left/top, 0 center, 1 right/bottom
+	Layer          int // 0 to 61, named 0-9, a-z, A-Z; see layers.go
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text", "fill": "Fill"}
@@ -248,9 +249,14 @@ func (o object) label() string {
 
 // objectsIn lists objects with a cell inside the rectangle, highest index first.
 func objectsIn(objs []object, x0, y0, x1, y1 int) []int {
+	return objectsInScene(compose(objs), x0, y0, x1, y1)
+}
+
+// objectsInScene is objectsIn on a scene already drawn, such as one that
+// leaves out hidden and locked layers.
+func objectsInScene(c *canvas, x0, y0, x1, y1 int) []int {
 	x0, x1 = order(x0, x1)
 	y0, y1 = order(y0, y1)
-	c := compose(objs)
 	seen := map[int]bool{}
 	var out []int
 	for y := y0; y <= y1; y++ {

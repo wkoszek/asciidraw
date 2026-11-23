@@ -77,15 +77,17 @@ type app struct {
 
 	msg       string
 	msgErr    bool
-	placer    *placer  // the T dialog, while it is open; see place.go
-	aligning  bool     // a was pressed: the next key picks how to line up; see align.go
-	confirm   string   // action waiting for a second press: "new" or "quit"
-	mx, my    int      // last mouse position, for the readout
-	swallow   bool     // ignore mouse events until the button is released
-	shift     bool     // Shift held during the last mouse event
-	snap      int      // shape a dragged line end would attach to, or -1
-	clip      []object // what ^C copied, moved to 0,0
-	clipText  string   // its picture, as put on the system clipboard
+	placer    *placer    // the T dialog, while it is open; see place.go
+	aligning  bool       // a was pressed: the next key picks how to line up; see align.go
+	layerCmd  rune       // l, H or K was pressed: the next key names a layer; see layers.go
+	lay       layerState // this page's hidden and locked layers, and the one new shapes go on
+	confirm   string     // action waiting for a second press: "new" or "quit"
+	mx, my    int        // last mouse position, for the readout
+	swallow   bool       // ignore mouse events until the button is released
+	shift     bool       // Shift held during the last mouse event
+	snap      int        // shape a dragged line end would attach to, or -1
+	clip      []object   // what ^C copied, moved to 0,0
+	clipText  string     // its picture, as put on the system clipboard
 	showPanel bool
 	help      bool            // the ? screen is open
 	colors    *picker         // the C color picker, when open
@@ -100,7 +102,7 @@ type app struct {
 }
 
 // meta is what the drawing keeps besides its pages.
-func (a *app) meta() docMeta { return docMeta{a.pal, a.exp} }
+func (a *app) meta() docMeta { return docMeta{a.pal, a.exp, a.pageLayers()} }
 
 func (a *app) setMeta(m docMeta) {
 	if m.Pal != nil {
@@ -108,6 +110,9 @@ func (a *app) setMeta(m docMeta) {
 	}
 	if m.Export.Font != 0 {
 		a.exp = m.Export
+	}
+	if m.Layers != nil {
+		a.setLayers(m.Layers)
 	}
 }
 
@@ -146,6 +151,7 @@ func (a *app) pushUndo(state []object) {
 
 // commit records an undo step if the objects changed since before.
 func (a *app) commit(before []object) bool {
+	a.sortLayers()  // a new or moved shape takes its place in layer order
 	a.reattach(nil) // attached line ends follow whatever just changed
 	if reflect.DeepEqual(before, a.objs) {
 		return false
@@ -302,6 +308,14 @@ func (a *app) key(ev *tcell.EventKey) bool {
 		a.alignKey(ev)
 		return false
 	}
+	if a.layerCmd != 0 {
+		r := rune(0)
+		if ev.Key() == tcell.KeyRune {
+			r = ev.Rune()
+		}
+		a.layerKey(r)
+		return false
+	}
 	pending := a.confirm
 	a.confirm = ""
 
@@ -414,8 +428,9 @@ func (a *app) typeSnapshot() {
 func (a *app) typeRune(r rune) {
 	a.typeSnapshot()
 	if a.edit < 0 {
-		a.objs = append(a.objs, object{Kind: "text", X0: a.cx, Y0: a.cy, Text: []string{""}})
+		a.objs = append(a.objs, object{Kind: "text", X0: a.cx, Y0: a.cy, Text: []string{""}, Layer: a.lay.active})
 		a.edit, a.tl, a.tc = len(a.objs)-1, 0, 0
+		a.sortLayers()
 	}
 	a.sel = a.edit
 	o := &a.objs[a.edit]
@@ -587,15 +602,17 @@ func (a *app) cursor() (int, int) {
 func (a *app) objectKey(ev *tcell.EventKey) {
 	n := len(a.objs)
 	switch ev.Key() {
-	case tcell.KeyTab:
-		if n > 0 {
-			a.sel = (a.sel + 1) % n
+	case tcell.KeyTab, tcell.KeyBacktab:
+		step := 1
+		if ev.Key() == tcell.KeyBacktab {
+			step = n - 1
 		}
-		return
-	case tcell.KeyBacktab:
-		if n > 0 {
-			a.sel = (a.sel + n - 1) % n
+		for k := 0; k < n; k++ { // skip shapes on hidden and locked layers
+			if a.sel = (max(a.sel, -1) + step + n) % n; a.pickable(a.sel) {
+				return
+			}
 		}
+		a.sel = -1
 		return
 	case tcell.KeyEscape:
 		a.sel = -1
@@ -651,6 +668,8 @@ func (a *app) objectKey(ev *tcell.EventKey) {
 			a.openSettings()
 		case 'L':
 			a.openLibrary()
+		case 'l', 'H', 'K':
+			a.startLayerKey(ev.Rune())
 		}
 		return
 	}
@@ -755,6 +774,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 		a.say("Align cancelled.")
 		return
 	}
+	if a.layerCmd != 0 && held {
+		a.layerCmd, a.swallow = 0, true
+		a.say("Cancelled.")
+		return
+	}
 	a.shift = ev.Modifiers()&tcell.ModShift != 0
 
 	// A click that the menu used must not turn into a drag on the canvas.
@@ -836,7 +860,7 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 			}
 		case sx < cw && sy < h:
 			a.mx, a.my = x, y
-			a.hover = compose(a.objs).owner(x, y)
+			a.hover = a.pickScene().owner(x, y)
 			a.wheel(b)
 		}
 		return
@@ -847,7 +871,11 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 		a.stopTyping()
 		a.drag = &drag{mode: dPanel, obj: a.panelItemAt(sx, sy)}
 		a.dropAt = -1
-		if i := a.panelItemAt(sx, sy); i >= 0 {
+		if i := a.panelItemAt(sx, sy); i >= 0 && !a.pickable(i) {
+			a.drag = nil
+			a.swallow = true
+			a.sayErr(fmt.Sprintf("That shape is on layer %s, which is hidden or locked. H or K and %s changes that.", pageChar(a.objs[i].Layer), pageChar(a.objs[i].Layer)))
+		} else if i >= 0 {
 			if a.shift {
 				a.toggleSel(i)
 			} else {
@@ -908,8 +936,8 @@ func (a *app) press(x, y int, right bool) {
 			return
 		}
 	}
-	i := compose(a.objs).owner(x, y)
-	if i >= 0 && a.objs[i].Kind == "fill" && boxAt(a.objs, x, y) > i {
+	i := a.pickScene().owner(x, y)
+	if i >= 0 && a.objs[i].Kind == "fill" && a.labelBoxAt(x, y) > i {
 		i = -1 // the inside of a box drawn over a fill counts as empty
 	}
 	if i >= 0 {
@@ -1081,7 +1109,7 @@ func (a *app) release() {
 		if !d.moved() && !a.widgetTool() && !a.shift {
 			// A click inside a box types its label. Shift-click there for
 			// loose text instead.
-			if i := boxAt(a.objs, d.x0, d.y0); i >= 0 {
+			if i := a.labelBoxAt(d.x0, d.y0); i >= 0 {
 				a.startEditing(i)
 				return
 			}
@@ -1092,7 +1120,9 @@ func (a *app) release() {
 			a.cx, a.cy = d.x0, d.y0
 			return
 		}
-		a.objs = append(a.objs, a.newShape(d))
+		o := a.newShape(d)
+		o.Layer = a.lay.active
+		a.objs = append(a.objs, o)
 		a.sel = len(a.objs) - 1
 		if n := len(a.objs) - 1; a.objs[n].Kind == "fill" { // shading belongs behind things
 			a.objs = append([]object{a.objs[n]}, a.objs[:n]...)
@@ -1100,7 +1130,7 @@ func (a *app) release() {
 		}
 		a.commit(d.before)
 	case dErase:
-		hits := objectsIn(a.objs, d.x0, d.y0, d.x1, d.y1)
+		hits := objectsInScene(a.pickScene(), d.x0, d.y0, d.x1, d.y1)
 		for _, i := range hits {
 			a.remove(i)
 		}
@@ -1195,10 +1225,10 @@ func (a *app) render() {
 	if d != nil && d.mode == dCreate && (d.moved() || a.widgetTool()) {
 		objs = append(cloneObjs(a.objs), a.newShape(d))
 	}
-	scene := compose(objs)
+	scene := composeLayers(objs, a.lay.hidden)
 	doomed := map[int]bool{}
 	if d != nil && d.mode == dErase {
-		for _, i := range objectsIn(a.objs, d.x0, d.y0, d.x1, d.y1) {
+		for _, i := range objectsInScene(a.pickScene(), d.x0, d.y0, d.x1, d.y1) {
 			doomed[i] = true
 		}
 	}
@@ -1254,6 +1284,8 @@ func (a *app) render() {
 		s.ShowCursor(min(end, sw-1), sh-2)
 	} else if a.aligning {
 		a.text(1, sh-2, alignHelp, bar.Bold(true).Foreground(tcell.ColorYellow))
+	} else if a.layerCmd != 0 {
+		a.text(1, sh-2, layerHelp[a.layerCmd], bar.Bold(true).Foreground(tcell.ColorYellow))
 	} else {
 		name := a.file
 		if name == "" {
@@ -1263,6 +1295,9 @@ func (a *app) render() {
 			name += " *"
 		}
 		x := a.text(1, sh-2, name, bar.Bold(true))
+		if ls := a.layerStatus(); ls != "" {
+			x = a.text(x+2, sh-2, ls, bar.Foreground(tcell.ColorYellow).Bold(true))
+		}
 		// Tool and a sample of the style. While the menu is open this
 		// follows the menu cursor, so a style shows before you pick it.
 		ps := bar.Foreground(tcell.ColorWhite)

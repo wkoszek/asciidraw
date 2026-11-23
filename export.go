@@ -123,7 +123,7 @@ type exportFile struct {
 // One page, or pages kept together, gives mock.md; split pages give
 // mock_page0.md, mock_page1.md and so on.
 func (a *app) exportPlan(base string) []exportFile {
-	return planExports(a.allPages(), a.exp, base)
+	return planExports(a.visiblePages(), a.exp, base)
 }
 
 func planExports(pages [][]object, e exportSettings, base string) []exportFile {
@@ -215,7 +215,7 @@ func (a *app) writeExports(base string) {
 	if len(names) > 3 {
 		msg = fmt.Sprintf("Exported %d files, %s to %s", len(names), names[0], names[len(names)-1])
 	}
-	if n := len(trimPages(a.allPages())); n > 1 && !a.exp.Split {
+	if n := len(trimPages(a.visiblePages())); n > 1 && !a.exp.Split {
 		msg += fmt.Sprintf(" (%d pages)", n)
 	}
 	a.say(msg)
@@ -491,7 +491,7 @@ func (a *app) renderSettings() {
 			a.text(cx, y, "px", dim)
 		}
 	}
-	pw, ph := pixelSize([][]object{a.objs}, a.exp.Font)
+	pw, ph := pixelSize([][]object{visible(a.objs, a.lay.hidden)}, a.exp.Font)
 	a.text(x0+2, y0+7, fmt.Sprintf("This page: %d×%d px. 12px is the reference size.", pw, ph), dim)
 	a.text(x0+2, y0+8, "^E writes "+a.planNames(), tcell.StyleDefault)
 	a.text(x0+2, y0+h-2, "↑↓ row  ←→ choose  Space tick  Enter keep  Esc undo", dim)

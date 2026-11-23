@@ -38,16 +38,16 @@ var helpRight = []string{
 	"The selection",
 	"  drag  ←→↑↓     move, nudge",
 	"  y d p x        copy/cut/paste/del",
-	"  ^D             duplicate",
-	"  ]  [           front, back",
+	"  ^D  ]  [       dup, front, back",
 	"  t  T           style, label spot",
 	"  C  a           colors, align",
 	"  Enter          edit label or text",
 	"  Space          toggle, next shade",
 	"",
-	"Pages",
+	"Pages and layers",
 	"  > .  / < ,     next / previous page",
 	"  +              copy this page",
+	"  l  H  K + 0-Z  layer, hide, lock",
 }
 
 func (a *app) renderHelp() {
