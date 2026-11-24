@@ -13,7 +13,8 @@
 .Op Fl -font Ar n
 .Op Fl -theme Ar light | dark
 .Op Fl -pages Ar together | split
-.Ar file output
+.Ar file
+.Op Ar output
 .Nm
 .Cm convert
 .Ar file output
@@ -63,15 +64,25 @@ Both read any
 .Ar file
 that
 .Nm
-opens, overwrite
-.Ar output
-without asking if it exists, and print the names of the files they wrote.
+opens.
+They write over existing files without asking, and print the name of each
+file they write.
+.Cm export
+refuses to write over its own input.
 .Bl -tag -width Ds
 .It Cm export
 Save the drawing as Markdown, PNG, JPEG, SVG or HTML.
-The extension of
-.Ar output
-sets the format:
+With no
+.Ar output ,
+it writes each format saved in the drawing's export settings, in the
+drawing's folder, such as
+.Pa mock.md
+and
+.Pa mock.png .
+These are the files ^E writes; the S key picks the formats.
+Given an
+.Ar output ,
+it writes just one format, and the extension picks it:
 .Pa .md ,
 .Pa .png ,
 .Pa .jpg ,
@@ -347,13 +358,20 @@ session.
 Exporting does not save the drawing.
 .It S
 Open the export settings.
+If you're typing text, press Esc before S.
 Pick the formats, the font size (12 pixels by default), a
 light or dark theme, and whether a drawing of several pages goes in one
 file or in one file per page, such as
 .Pa mock_page0.png .
-Enter keeps the changes and Esc throws them away.
-If you're typing text, press Esc first.
-The settings are saved with the drawing.
+The settings window ends in two buttons, Save and Cancel.
+Save keeps the changes and saves the whole drawing, as ^S does.
+It asks for a name if the drawing has none.
+Cancel brings back the settings you had when you opened the window.
+Enter presses the button under the cursor, and means Save on any other
+row.
+Esc,
+.Cm q ,
+pressing S again, or a click outside the window all mean Cancel.
 .It ^N
 Start a new drawing.
 .It ^Q
@@ -497,7 +515,8 @@ wins.
 .Cm export
 and
 .Cm convert
-exit with 2 for a wrong extension or a bad flag.
+exit with 2 for a wrong extension, a bad flag, or an output that is the
+input file.
 .Sh EXAMPLES
 Start a new drawing called
 .Pa login.adraw :

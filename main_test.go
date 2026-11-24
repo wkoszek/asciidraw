@@ -2718,7 +2718,6 @@ func TestCommands(t *testing.T) {
 		{"export", ad, filepath.Join(dir, "x.gif")},
 		{"export", "--theme", "blue", ad, png1},
 		{"export", "--font", "200", ad, png1},
-		{"export", ad},
 		{"convert", ad},
 	} {
 		if code, _, _ := run(bad...); code != 2 {
@@ -2729,12 +2728,94 @@ func TestCommands(t *testing.T) {
 		t.Fatal("a missing input exits 1")
 	}
 
+	// No output: what ^E writes, the formats saved with the drawing.
+	saved := filepath.Join(dir, "saved.adraw")
+	m := defaultMeta()
+	m.Export.Formats = []string{"md", "svg"}
+	os.WriteFile(saved, must(encodeDoc([][]object{{{Kind: "box", X1: 4, Y1: 2}}}, m)), 0o644)
+	if code, out, e := run("export", saved); code != 0 || out != filepath.Join(dir, "saved.md")+"\n"+filepath.Join(dir, "saved.svg")+"\n" {
+		t.Fatalf("export with saved settings: %d %q %s", code, out, e)
+	}
+	// It never writes over the Markdown file it read.
+	srcMD := filepath.Join(dir, "page.md")
+	os.WriteFile(srcMD, []byte("```\n+--+\n+--+\n```\n"), 0o644)
+	if code, _, e := run("export", srcMD); code != 2 || !strings.Contains(e, "replace the drawing") {
+		t.Fatalf("export over its own input: %d %s", code, e)
+	}
+	srcHTM := filepath.Join(dir, "page.htm")
+	os.WriteFile(srcHTM, []byte("+--+\n+--+\n"), 0o644)
+	if code, _, e := run("export", srcHTM, srcHTM); code != 2 || !strings.Contains(e, "replace the drawing") {
+		t.Fatalf("export to its own input, named as typed: %d %s", code, e)
+	}
+
 	// Split pages: out_page0.png, out_page1.png.
 	two := filepath.Join(dir, "two.adraw")
 	box := []object{{Kind: "box", X1: 4, Y1: 2}}
 	os.WriteFile(two, must(encodeDoc([][]object{box, box}, defaultMeta())), 0o644)
 	if code, out, e := run("export", "--pages", "split", two, filepath.Join(dir, "out.png")); code != 0 || !strings.Contains(out, "out_page1.png") {
 		t.Fatalf("split: %d %s %s", code, out, e)
+	}
+}
+
+// The S dialog ends in Save and Cancel. Save writes the drawing, settings
+// and all; Cancel, Esc and a click outside put the settings back.
+func TestSettingsButtons(t *testing.T) {
+	a := testAppSized(t, 80, 24)
+	a.file = filepath.Join(t.TempDir(), "mock.adraw")
+	drag2(a, 0, 0, 10, 4)
+	ctrl(a, tcell.KeyEscape)
+
+	// Pick the dark theme, walk down to the buttons, and choose Cancel.
+	typeStr(a, "S")
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyRight)
+	if a.exp.Theme != "dark" {
+		t.Fatalf("theme: %s", a.exp.Theme)
+	}
+	a.render()
+	if !strings.Contains(screenText(a), "[ Save ]   [ Cancel ]") {
+		t.Fatal("the dialog shows Save and Cancel")
+	}
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyEnter)
+	if a.settings != nil || a.exp.Theme != "light" {
+		t.Fatal("Cancel puts the settings back")
+	}
+
+	// A click outside cancels too.
+	typeStr(a, "S")
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyRight)
+	click(a, 0, 0)
+	if a.settings != nil || a.exp.Theme != "light" {
+		t.Fatal("a click outside cancels")
+	}
+
+	// Save writes the file now, with the settings in it.
+	typeStr(a, "S")
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyDown)
+	ctrl(a, tcell.KeyRight)
+	ctrl(a, tcell.KeyEnter)
+	if a.settings != nil || a.dirty || !strings.HasPrefix(a.msg, "Saved ") {
+		t.Fatalf("Save saves the drawing: %q", a.msg)
+	}
+	_, m, _, _, err := loadDrawing(a.file)
+	if err != nil || m.Export.Theme != "dark" {
+		t.Fatalf("the file holds the theme: %v %+v", err, m.Export)
+	}
+
+	// Clicking the Save button works the same.
+	typeStr(a, "S")
+	x0, _, _, _ := a.settingsBox()
+	a.msg = ""
+	click(a, x0+2+setLabelW+1, a.rowY(setButtons))
+	if a.settings != nil || !strings.HasPrefix(a.msg, "Saved ") {
+		t.Fatalf("clicking Save saves: %q", a.msg)
 	}
 }
 

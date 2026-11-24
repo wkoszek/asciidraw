@@ -62,15 +62,20 @@ asciidraw notes.md     # bring in a picture from Markdown or plain text
 Two commands work without opening the drawing on screen:
 
 ```sh
-asciidraw export mock.adraw mock.png       # also .md, .jpg, .svg or .html
+asciidraw export mock.adraw                # the formats saved in the drawing
+asciidraw export mock.adraw mock.png       # just PNG; also .md, .jpg, .svg or .html
 asciidraw export --font 16 --theme dark mock.adraw mock.png
 asciidraw convert notes.md notes.adraw     # or notes.yaml
 ```
 
-`export` saves the drawing as Markdown, PNG, JPEG, SVG or HTML. The output's
-extension sets the format. It uses the export settings saved in the
-drawing (see Export). The flags override them for this run only, and the
-drawing file stays the same. Put the flags before the file names:
+`export` saves the drawing as Markdown, PNG, JPEG, SVG or HTML. With only
+the drawing named, it writes each format saved in the drawing's export
+settings. The files go in the drawing's folder, such as `mock.md` and
+`mock.png`. These are the same files ^E (Ctrl+E) writes inside asciidraw,
+and `S` picks the formats (see Export). Name an output file to write just
+one format; its extension picks it. Either way, it uses the rest of the
+saved settings. The flags below change them for this run only. They
+don't change the drawing file. Put the flags before the file names:
 
 - `--font` is the font size in pixels for every format but Markdown.
   The default is 12.
@@ -85,9 +90,12 @@ Use `convert` to turn a Markdown or text file into a drawing, or to
 switch a drawing between `.yaml` and `.adraw`. Between those two, the
 contents stay the same; only the name changes.
 
-Both commands overwrite the output without asking, and print the names
-of the files they wrote. They exit with 0 when they work, 1 when a file
-can't be read or written, and 2 for a wrong extension or a bad flag.
+Both commands write over existing files without asking. They print the
+name of each file they write. `export` never writes over its own input.
+Exporting `notes.md` to Markdown would replace it, so name another output,
+such as `notes-out.md`. The commands exit with 0 when they work, 1 when a
+file can't be read or written, and 2 for a wrong extension, a bad flag, or
+an output that is the input file.
 
 In this README, `^T` means Ctrl+T.
 
@@ -704,7 +712,7 @@ at the window's corner, such as `view 3,6`.
 Every 30 seconds, asciidraw writes any unsaved changes to a recovery copy.
 It also writes one when the terminal tells it the window is closing. If it
 crashes, you lose at most the last 30 seconds of work. Your drawing's own
-file only changes when you press ^S.
+file only changes when you press ^S, or Save in the export settings.
 
 The next time you open the same drawing, asciidraw finds the copy, loads
 it, and says so. Press ^S to keep the changes. Saving deletes the copy.
@@ -789,8 +797,7 @@ drawing, not in the export. Exporting does not save the drawing; press
 
 **S** (Shift-s) opens the export settings. If you're typing text, press
 Esc first. Up and down move between rows, and left and right move along
-a row. Enter keeps your changes and Esc throws them away. You can also
-click.
+a row. You can also click.
 
 - **Write** picks the formats. Press Space to tick or untick the one under
   the cursor. You can't untick the last one.
@@ -807,9 +814,19 @@ click.
   as in the corner of the screen. A drawing with one page always gets
   plain names such as `mock.png`.
 
-The settings are saved in the drawing file, under `export`, once you
-change them from the defaults. Changing them marks the drawing as
-changed, so press ^S to keep them.
+At the bottom of the window are two buttons, Save and Cancel.
+
+- **Save** keeps your changes and saves the whole drawing, just as ^S
+  does. If the drawing has no file name yet, Save asks for one first.
+- **Cancel** brings back the settings you had when you opened the window.
+
+Enter presses the button under the cursor. On any other row, Enter means
+Save. Esc, `q`, pressing S again, or a click outside the window all mean
+Cancel.
+
+Save writes the settings into the drawing file, in a section named
+`export`. If every setting is at its default, the file gets no `export`
+section.
 
 When a Markdown or HTML file holds several pages, each page gets its own
 block, with its name above it: `Page 0`, `Page 1` and so on. When a PNG, JPEG or SVG

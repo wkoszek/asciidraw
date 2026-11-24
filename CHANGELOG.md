@@ -28,8 +28,11 @@ before you tag.
   no extension, and `asciidraw mock` opens `mock.adraw`, or starts it.
   They hold the same YAML as before, and `.yaml` and `.yml` files still
   open and save under their own names.
-- `asciidraw export <file> <output>` saves a drawing as Markdown, PNG or
-  JPEG without opening it. The output's extension sets the format.
+- `asciidraw export <file>` writes each format saved in the drawing's
+  export settings into the drawing's folder, without opening it. These
+  are the same files ^E writes. To write just one format, add an output
+  name, such as `mock.png`. Its extension picks the format. `export`
+  won't write over its own input, and exits with 2 if it would.
   `--font`, `--theme` and `--pages` override the saved export settings
   for this run.
 - `asciidraw convert <file> <output>` writes a drawing (`.adraw` or
@@ -47,7 +50,11 @@ before you tag.
   formats ^E writes and the font size for images, 12px by default.
 - The settings also pick a light or dark theme for images, and one file
   for all pages or a file per page, such as `mock_page0.png`. They are
-  saved in the drawing file under `export`.
+  saved in an `export` section of the drawing file.
+- The `S` settings window ends in Save and Cancel buttons. Save saves the
+  whole drawing, as ^S does. Cancel, or Esc, brings back the settings you
+  had when you opened the window. Enter presses the button under the
+  cursor, and means Save on any other row.
 - PNGs are stored with a small list of colors when the picture allows,
   so a screen-sized drawing usually makes a PNG of a few kilobytes.
 - The drawing file is now a list of pages (`version: 2`). Older files open

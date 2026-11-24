@@ -253,10 +253,17 @@ const (
 	setFont
 	setTheme
 	setPages
+	setButtons // Save and Cancel, at the bottom
 	setRows
 )
 
-var setLabels = [setRows]string{"Write", "Font", "Theme", "Pages"}
+var setLabels = [setRows]string{"Write", "Font", "Theme", "Pages", ""}
+
+// The buttons, in the order the dialog shows them.
+const (
+	btnSave = iota
+	btnCancel
+)
 
 type settings struct {
 	row    int
@@ -297,6 +304,8 @@ func (a *app) choices(row int) []string {
 		return out
 	case setTheme:
 		return themeNames
+	case setButtons:
+		return []string{"[ Save ]", "[ Cancel ]"}
 	}
 	return []string{"one file", "a file per page"}
 }
@@ -310,6 +319,8 @@ func (a *app) chosen(row, col int) bool {
 		return a.exp.Font == fontSizes[col]
 	case setTheme:
 		return a.exp.Theme == themeNames[col]
+	case setButtons:
+		return false
 	}
 	return a.exp.Split == (col == 1)
 }
@@ -345,6 +356,20 @@ func (a *app) setPick(row, col int) {
 	}
 }
 
+// settingsButton runs a button: Save keeps the settings and saves the drawing, so
+// they are in the file; Cancel puts them back.
+func (a *app) settingsButton(btn int) {
+	if btn == btnCancel {
+		a.closeSettings(false)
+		return
+	}
+	a.closeSettings(true)
+	a.save()
+	if a.prompt == nil && !a.msgErr {
+		a.say(a.msg + ". ^E writes " + a.planNames() + ".")
+	}
+}
+
 func (a *app) closeSettings(keep bool) {
 	st := a.settings
 	a.settings = nil
@@ -356,7 +381,6 @@ func (a *app) closeSettings(keep bool) {
 	if !a.exportSame(st.before) {
 		a.dirty = true // the settings are saved with the drawing
 	}
-	a.say("^E writes " + a.planNames() + ".")
 }
 
 func (a *app) exportSame(e exportSettings) bool {
@@ -387,7 +411,7 @@ func (a *app) settingsKey(ev *tcell.EventKey) {
 	move := func(d int) {
 		n := len(a.choices(st.row))
 		st.col[st.row] = (st.col[st.row] + d + n) % n
-		if st.row != setFormats {
+		if st.row != setFormats && st.row != setButtons {
 			a.setPick(st.row, st.col[st.row]) // radio rows follow the cursor
 		}
 	}
@@ -401,9 +425,13 @@ func (a *app) settingsKey(ev *tcell.EventKey) {
 	case tcell.KeyRight:
 		move(1)
 	case tcell.KeyEnter:
-		a.closeSettings(true)
+		if st.row == setButtons {
+			a.settingsButton(st.col[setButtons])
+		} else {
+			a.settingsButton(btnSave)
+		}
 	case tcell.KeyEscape:
-		a.closeSettings(false)
+		a.settingsButton(btnCancel)
 	case tcell.KeyRune:
 		switch ev.Rune() {
 		case 'k':
@@ -415,9 +443,13 @@ func (a *app) settingsKey(ev *tcell.EventKey) {
 		case 'l':
 			move(1)
 		case ' ', 'x':
-			a.setPick(st.row, st.col[st.row])
+			if st.row == setButtons {
+				a.settingsButton(st.col[setButtons])
+			} else {
+				a.setPick(st.row, st.col[st.row])
+			}
 		case 'S', 'q':
-			a.closeSettings(true)
+			a.settingsButton(btnCancel)
 		}
 	}
 }
@@ -425,16 +457,27 @@ func (a *app) settingsKey(ev *tcell.EventKey) {
 const setLabelW = 8 // "  Write " and so on, before the choices
 
 func (a *app) settingsBox() (x0, y0, w, h int) {
-	w, h = 72, 12
+	w, h = 72, 14
 	sw, sh := a.s.Size()
 	return max((sw-w)/2, 0), max((sh-2-h)/2, 0), w, h
 }
 
+// rowY is the screen line of a row: the choices at the top, the buttons
+// below the notes.
+func (a *app) rowY(row int) int {
+	_, y0, _, _ := a.settingsBox()
+	if row == setButtons {
+		return y0 + 10
+	}
+	return y0 + 2 + row
+}
+
 // settingsAt finds the word at screen cell (x, y).
 func (a *app) settingsAt(x, y int) (row, col int, ok bool) {
-	x0, y0, _, _ := a.settingsBox()
-	row = y - y0 - 2
-	if row < 0 || row >= setRows {
+	x0, _, _, _ := a.settingsBox()
+	for row = 0; row < setRows && a.rowY(row) != y; row++ {
+	}
+	if row == setRows {
 		return 0, 0, false
 	}
 	cx := x0 + 2 + setLabelW
@@ -454,12 +497,16 @@ func (a *app) settingsMouse(x, y int, b tcell.ButtonMask) {
 	if row, col, ok := a.settingsAt(x, y); ok {
 		st := a.settings
 		st.row, st.col[row] = row, col
-		a.setPick(row, col)
+		if row == setButtons {
+			a.settingsButton(col)
+		} else {
+			a.setPick(row, col)
+		}
 		return
 	}
 	x0, y0, w, h := a.settingsBox()
 	if x < x0 || x >= x0+w || y < y0 || y >= y0+h {
-		a.closeSettings(true)
+		a.settingsButton(btnCancel)
 	}
 }
 
@@ -469,7 +516,7 @@ func (a *app) renderSettings() {
 	a.frame(x0, y0, w, h, " S Export settings ")
 	dim := tcell.StyleDefault.Dim(true)
 	for row := 0; row < setRows; row++ {
-		y := y0 + 2 + row
+		y := a.rowY(row)
 		ls := tcell.StyleDefault
 		if row == st.row {
 			ls = ls.Bold(true).Foreground(tcell.ColorAqua)
@@ -494,5 +541,5 @@ func (a *app) renderSettings() {
 	pw, ph := pixelSize([][]object{visible(a.objs, a.lay.hidden)}, a.exp.Font)
 	a.text(x0+2, y0+7, fmt.Sprintf("This page: %d×%d px. 12px is the reference size.", pw, ph), dim)
 	a.text(x0+2, y0+8, "^E writes "+a.planNames(), tcell.StyleDefault)
-	a.text(x0+2, y0+h-2, "↑↓ row  ←→ choose  Space tick  Enter keep  Esc undo", dim)
+	a.text(x0+2, y0+h-2, "↑↓ row  ←→ choose  Space tick  Enter save to the file  Esc cancel", dim)
 }

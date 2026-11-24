@@ -12,7 +12,7 @@ import (
 
 // Commands that work without opening the drawing on screen:
 //
-//	asciidraw export [flags] <file> <output>   write a picture: .md, .png or .jpg
+//	asciidraw export [flags] <file> [output]   write pictures, as ^E does
 //	asciidraw convert <file> <output>          write a drawing: .adraw or .yaml
 //
 // Both read anything asciidraw opens: a drawing, or a Markdown or text file.
@@ -56,22 +56,27 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 	theme := fs.String("theme", "", "light or dark (default: the drawing's, or light)")
 	pages := fs.String("pages", "", "together, or split for one file per page (default: the drawing's)")
 	fs.Usage = func() {
-		fmt.Fprintln(stderr, "usage: asciidraw export [flags] <file> <output>")
-		fmt.Fprintln(stderr, "\nThe output's extension picks the format: .md, .png, .jpg, .svg or .html.")
+		fmt.Fprintln(stderr, "usage: asciidraw export [flags] <file> [output]")
+		fmt.Fprintln(stderr, "\nWith no output, it writes each format saved in the drawing, in its folder.")
+		fmt.Fprintln(stderr, "An output writes just one format; its extension picks .md, .png, .jpg,")
+		fmt.Fprintln(stderr, ".svg or .html.")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if fs.NArg() != 2 {
+	if fs.NArg() != 1 && fs.NArg() != 2 {
 		fs.Usage()
 		return 2
 	}
-	in, out := fs.Arg(0), fs.Arg(1)
-	format, ok := formatOf(out)
-	if !ok {
-		fmt.Fprintf(stderr, "asciidraw: %s: the output must end in .md, .png, .jpg, .svg or .html\n", out)
-		return 2
+	in, out := fs.Arg(0), fs.Arg(1) // out is "" when not given
+	format := ""
+	if out != "" {
+		var ok bool
+		if format, ok = formatOf(out); !ok {
+			fmt.Fprintf(stderr, "asciidraw: %s: the output must end in .md, .png, .jpg, .svg or .html\n", out)
+			return 2
+		}
 	}
 	drawing, meta, _, _, err := loadDrawing(in)
 	if err != nil {
@@ -84,7 +89,9 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	e := meta.Export
-	e.Formats = []string{format}
+	if format != "" {
+		e.Formats = []string{format}
+	}
 	if *font != 0 {
 		if *font < 6 || *font > 72 {
 			fmt.Fprintln(stderr, "asciidraw: --font must be 6 to 72")
@@ -110,11 +117,22 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	// The output names the file; for split pages, it is the base of each name.
-	base := strings.TrimSuffix(out, filepath.Ext(out))
-	for _, f := range planExports(drawing, e, base) {
-		if !e.Split || len(trimPages(drawing)) == 1 {
-			f.path = out // keep the extension as typed, such as .jpeg
+	// With no output, the files go next to the drawing, named after it.
+	base := exportBase(in)
+	if out != "" {
+		base = strings.TrimSuffix(out, filepath.Ext(out))
+	}
+	plan := planExports(drawing, e, base)
+	for k := range plan {
+		if out != "" && (!e.Split || len(trimPages(drawing)) == 1) {
+			plan[k].path = out // keep the extension as typed, such as .jpeg
 		}
+		if sameFile(plan[k].path, in) {
+			fmt.Fprintf(stderr, "asciidraw: %s would replace the drawing itself; name another output\n", plan[k].path)
+			return 2
+		}
+	}
+	for _, f := range plan {
 		data, err := exportBytes(f, e)
 		if err == nil {
 			err = os.WriteFile(f.path, data, 0o644)
@@ -154,4 +172,15 @@ func cmdConvert(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, out)
 	return 0
+}
+
+// sameFile says whether two paths name one file, so export never writes
+// over the Markdown file it read.
+func sameFile(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	x, err1 := os.Stat(a)
+	y, err2 := os.Stat(b)
+	return err1 == nil && err2 == nil && os.SameFile(x, y)
 }

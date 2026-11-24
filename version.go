@@ -21,17 +21,19 @@ func getVersion() string {
 }
 
 const usage = `usage: asciidraw [file]
-       asciidraw export [flags] <file> <output>
+       asciidraw export [flags] <file> [output]
        asciidraw convert <file> <output>
 
   asciidraw              a new, untitled drawing
   asciidraw mock.adraw   open a drawing, or start a new one under that name
   asciidraw notes.md     bring in a picture from Markdown or plain text
 
+  asciidraw export mock.adraw
+                         write each format saved in the drawing, in its
+                         folder, without opening it
   asciidraw export mock.adraw mock.png
-                         write a picture without opening the drawing; the
-                         output's extension picks .md, .png, .jpg, .svg or
-                         .html. Flags:
+                         write just one format; the extension picks .md,
+                         .png, .jpg, .svg or .html. Flags:
                          --font N, --theme light|dark, --pages together|split
   asciidraw convert notes.md notes.adraw
                          write a drawing (.adraw or .yaml) from a drawing,
