@@ -296,18 +296,30 @@ func (a *app) choices(row int) []string {
 			out = append(out, box+" "+f.name)
 		}
 		return out
-	case setFont:
-		var out []string
-		for _, n := range fontSizes {
-			out = append(out, fmt.Sprint(n))
-		}
-		return out
-	case setTheme:
-		return themeNames
 	case setButtons:
 		return []string{"[ Save ]", "[ Cancel ]"}
 	}
-	return []string{"one file", "a file per page"}
+	// One choice per row, ticked like the formats so every row reads alike.
+	var words []string
+	switch row {
+	case setFont:
+		for _, n := range fontSizes {
+			words = append(words, fmt.Sprint(n))
+		}
+	case setTheme:
+		words = themeNames
+	default:
+		words = []string{"one file", "a file per page"}
+	}
+	out := make([]string, len(words))
+	for c, w := range words {
+		box := "[ ]"
+		if a.chosen(row, c) {
+			box = "[x]"
+		}
+		out[c] = box + " " + w
+	}
+	return out
 }
 
 // chosen says whether a word in a row is the one in effect.
