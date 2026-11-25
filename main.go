@@ -769,9 +769,9 @@ func (a *app) mouse(ev *tcell.EventMouse) {
 	sx, sy := ev.Position()
 	b := ev.Buttons()
 	held := b&(tcell.Button1|tcell.Button2) != 0
-	if a.aligning && held { // a click cancels a pending align, and does nothing else
-		a.aligning, a.swallow = false, true
-		a.say("Align cancelled.")
+	if a.aligning && held { // a click picks a choice or cancels, and does nothing else
+		a.swallow = true
+		a.alignMouse(sx, sy)
 		return
 	}
 	if a.layerCmd != 0 && held {
@@ -1339,6 +1339,9 @@ func (a *app) render() {
 	}
 	if a.settings != nil {
 		a.renderSettings()
+	}
+	if a.aligning {
+		a.renderAlign()
 	}
 	if a.library != nil {
 		a.renderLibrary()

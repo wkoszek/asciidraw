@@ -1988,9 +1988,12 @@ func TestAlign(t *testing.T) {
 	}
 	typeStr(a, "a")
 	n := len(a.objs)
-	drag2(a, 60, 20, 70, 25)
+	if x0, _, _, _ := a.alignBox(); x0 < 2 {
+		t.Fatal("the test needs room left of the window")
+	}
+	drag2(a, 1, 1, 5, 3)
 	if a.aligning || len(a.objs) != n {
-		t.Fatal("a click cancels, and draws nothing")
+		t.Fatal("a click outside the window cancels, and draws nothing")
 	}
 	// One shape isn't enough; nothing selected explains.
 	a.setSelection([]int{0}, 0)
@@ -2002,6 +2005,58 @@ func TestAlign(t *testing.T) {
 	typeStr(a, "a")
 	if !a.msgErr || a.aligning {
 		t.Fatal("a with nothing selected should explain")
+	}
+}
+
+// The window's keys draw what they do: [ | ] line up left edges, centers
+// and right edges; ^ - _ top edges, middles and bottom edges.
+func TestAlignWindowKeys(t *testing.T) {
+	r := [][4]int{{4, 2, 6, 3}, {20, 7, 10, 5}, {40, 4, 4, 9}}
+	for key, vim := range map[string]string{"[": "h", "|": "c", "]": "l", "^": "k", "-": "m", "_": "j"} {
+		a, b := boxesAt(t, r...), boxesAt(t, r...)
+		alignWith(a, "a"+key)
+		alignWith(b, "a"+vim)
+		for i := range a.objs {
+			if a.objs[i].X0 != b.objs[i].X0 || a.objs[i].Y0 != b.objs[i].Y0 {
+				t.Errorf("a%s should do what a%s does", key, vim)
+			}
+		}
+	}
+
+	// The window shows while it waits, and a click on a choice runs it.
+	a := boxesAt(t, r...)
+	typeStr(a, "a")
+	a.render()
+	if !strings.Contains(screenText(a), "centers evenly spaced, across") {
+		t.Fatal("a opens the window")
+	}
+	x0, y0, _, _ := a.alignBox()
+	click(a, x0+2+2, y0+2+1) // the [ on "left edges"
+	if a.aligning || a.objs[1].X0 != 4 || a.objs[2].X0 != 4 {
+		t.Fatalf("clicking left edges lines them up: %q", a.msg)
+	}
+	// The words "y  equal gaps, down" run y, and the Y words run Y.
+	for _, tc := range []struct {
+		row  int
+		want string
+	}{{9, "with even gaps, top to bottom"}, {10, "centers of 3 evenly, top to bottom"}} {
+		b := boxesAt(t, [4]int{0, 0, 3, 3}, [4]int{0, 5, 3, 3}, [4]int{0, 20, 3, 3})
+		typeStr(b, "a")
+		bx, by, _, _ := b.alignBox()
+		click(b, bx+2+30, by+2+tc.row)
+		if !strings.Contains(b.msg, tc.want) {
+			t.Errorf("row %d: %q, want %q", tc.row, b.msg, tc.want)
+		}
+	}
+	// A click on the window's empty space keeps it open.
+	typeStr(a, "a")
+	click(a, x0+2+40, y0+2+4)
+	if !a.aligning {
+		t.Fatal("a click on empty space in the window does nothing")
+	}
+	ctrl(a, tcell.KeyEscape)
+	if a.aligning {
+		t.Fatal("Esc closes the window")
 	}
 }
 
@@ -2028,6 +2083,22 @@ func TestSpread(t *testing.T) {
 	}
 	if !slices.Equal(ys, []int{0, 3, 6, 9}) {
 		t.Fatalf("spread down: %v", ys)
+	}
+	// X spreads by centers: 1 and 51 stay, and the others go to 17 and 34,
+	// steps of 16, 17 and 17 across the 50 cells between.
+	c := boxesAt(t, [4]int{0, 0, 3, 3}, [4]int{5, 0, 9, 3}, [4]int{20, 0, 5, 3}, [4]int{50, 0, 3, 3})
+	alignWith(c, "aX")
+	var mids []int
+	for _, o := range c.objs {
+		x, _, w, _ := o.bounds()
+		mids = append(mids, x+(w-1)/2)
+	}
+	if !slices.Equal(mids, []int{1, 17, 34, 51}) {
+		t.Fatalf("spread by centers: %v", mids)
+	}
+	alignWith(c, "aY") // all on one row already: nothing moves
+	if c.msg != "Already evenly spaced." {
+		t.Fatalf("aY on a row: %q", c.msg)
 	}
 	// Two shapes are not enough.
 	b := boxesAt(t, [4]int{0, 0, 3, 3}, [4]int{9, 0, 3, 3})

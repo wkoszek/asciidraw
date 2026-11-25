@@ -6,8 +6,12 @@ before you tag.
 
 ## Unreleased
 
-- `a` lines up the selected shapes by their edges or centers, or spaces
-  them out evenly.
+- `a` lines up the selected shapes by their edges or centers, or spreads
+  them out evenly. A window lists the choices, with pictures for
+  spreading out, and you can click one. `[`, `|` and `]` line up left
+  edges, centers and right edges; `^`, `-` and `_` line up top edges,
+  middles and bottom edges. `x` and `y` spread the shapes out with equal
+  gaps. `X` and `Y` space their centers evenly instead.
 - `T` places the label in a box or an oval in one of nine spots, such as
   top left or bottom right. The drawing file stores any spot but center as
   `place`.

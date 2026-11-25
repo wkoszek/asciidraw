@@ -569,38 +569,46 @@ is a new group.
 
 ### Align and spread out
 
-Select two or more shapes and press **a**. The status bar lists the
-choices. Press one more key:
+Select two or more shapes and press **a**. A window lists the choices,
+with small pictures for spreading out. Press one more key, or click a
+choice:
 
-| Key | Does |
-|---|---|
-| `h` or ← | lines up the left edges |
-| `l` or → | lines up the right edges |
-| `k` or ↑ | lines up the top edges |
-| `j` or ↓ | lines up the bottom edges |
-| `c` | lines up the centers from left to right, as in a column |
-| `m` | lines up the centers from top to bottom, as in a row |
-| `x` | spreads the shapes out evenly, left to right |
-| `y` | spreads the shapes out evenly, top to bottom |
+| Key | Does | Also |
+|---|---|---|
+| `[` | lines up the left edges | `h`, ← |
+| `\|` | lines up the centers, so the shapes stack in a column | `c` |
+| `]` | lines up the right edges | `l`, → |
+| `^` | lines up the top edges | `k`, ↑ |
+| `-` | lines up the middles, so the shapes sit in a row | `m` |
+| `_` | lines up the bottom edges | `j`, ↓ |
+| `x` | spreads the shapes out left to right, with equal gaps between them | |
+| `X` | spreads them out left to right, with their centers evenly spaced | |
+| `y` | spreads them out top to bottom, with equal gaps between them | |
+| `Y` | spreads them out top to bottom, with their centers evenly spaced | |
 
-Esc, any other key, or a click cancels. A cancelling click does nothing
-else.
+Esc, or a key not in the table, closes the window and changes nothing.
+So does a click outside the window. A click on an empty part of the
+window does nothing.
 
 Each command moves the shapes one way only. Lining up left edges moves
-shapes sideways, to the leftmost edge in the selection. Lining up top
-edges moves them up or down. `c` and `m` line the shapes up on the center
-of the whole selection.
+shapes sideways, to the leftmost left edge in the selection. Lining up
+top edges moves them up, to the highest top edge. `|` and `-` line the
+shapes up on the center of the box around them all.
 
-Spreading needs three or more shapes. For `x`, the leftmost and rightmost
-shapes stay put, and the ones between move so the gaps are all the same.
-For `y`, the topmost and bottommost stay put. If the space doesn't divide
-evenly, some gaps are one cell wider. If the shapes are too wide for the
-space, they overlap by the same amount.
+Spreading out needs three or more shapes. For `x`, the two shapes whose
+left edges are farthest left and farthest right stay put. The ones
+between move so the gaps are all the same. `X` keeps the shapes
+with the leftmost and rightmost centers, and moves the rest so their
+centers are the same distance apart. `y` and `Y` do the same from top to
+bottom. For shapes that are all the same size, `x` and `X` give the same
+result. A cell can't be split, so some gaps or distances may come out one
+cell bigger than the rest. If the shapes are too big for the space, they
+overlap.
 
 A selected group counts as one shape. Its shapes move together and keep
 their places inside it. If you picked one shape out of a group, that shape
-moves alone. Lines attached to shapes don't count. Their attached ends
-move with their shapes.
+moves alone. A loose line attached to a shape doesn't count. Its attached
+ends move with their shapes.
 
 One ^Z undoes the whole move.
 
