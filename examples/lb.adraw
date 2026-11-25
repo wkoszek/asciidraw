@@ -1,0 +1,67 @@
+# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export Markdown.
+version: 1
+objects:
+  - kind: box
+    style: line
+    x0: 9
+    y0: 1
+    x1: 27
+    y1: 8
+    text:
+      - 'WWW   '
+      - server
+    id: 1
+  - kind: box
+    style: line
+    x0: 29
+    y0: 1
+    x1: 47
+    y1: 8
+    text:
+      - 'WWW   '
+      - server
+    id: 2
+  - kind: box
+    style: line
+    x0: 9
+    y0: 14
+    x1: 47
+    y1: 18
+    text:
+      - LB
+    id: 3
+  - kind: arrow
+    style: line
+    x0: 18
+    y0: 14
+    x1: 18
+    y1: 8
+    id: 4
+    from:
+      id: 3
+      side: top
+      at: 9
+    to:
+      id: 1
+      side: bottom
+      at: 9
+  - kind: arrow
+    style: line
+    x0: 37
+    y0: 14
+    x1: 37
+    y1: 8
+    id: 5
+    from:
+      id: 3
+      side: top
+      at: 28
+    to:
+      id: 2
+      side: bottom
+      at: 8
+  - kind: text
+    x0: 53
+    y0: 9
+    text:
+      - d

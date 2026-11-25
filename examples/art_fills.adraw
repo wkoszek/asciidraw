@@ -1,0 +1,69 @@
+# asciidraw drawing. Open with: asciidraw <file>. Press ^E in it to export.
+version: 2
+pages:
+  - objects:
+      - kind: box
+        style: double
+        x0: 10
+        y0: 3
+        x1: 56
+        y1: 11
+        text:
+          - abstract art :-)
+        id: 1
+      - kind: fill
+        style: ascii
+        x0: 10
+        y0: 17
+        x1: 56
+        y1: 18
+        value: 1
+        id: 3
+      - kind: fill
+        style: ascii
+        x0: 10
+        y0: 13
+        x1: 28
+        y1: 15
+        value: 2
+        id: 4
+      - kind: fill
+        style: ascii
+        x0: 38
+        y0: 13
+        x1: 56
+        y1: 15
+        value: 3
+        id: 5
+      - kind: fill
+        style: line
+        x0: 10
+        y0: 20
+        x1: 32
+        y1: 23
+        value: 0
+        id: 6
+      - kind: fill
+        style: line
+        x0: 34
+        y0: 20
+        x1: 56
+        y1: 23
+        value: 1
+        id: 7
+      - kind: fill
+        style: line
+        x0: 10
+        y0: 25
+        x1: 32
+        y1: 28
+        value: 1
+        id: 8
+      - kind: fill
+        style: line
+        x0: 34
+        y0: 25
+        x1: 56
+        y1: 28
+        value: 2
+        id: 9
