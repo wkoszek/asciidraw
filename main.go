@@ -19,6 +19,7 @@ import (
 type prompt struct {
 	label string
 	buf   []rune
+	cur   int // where typing goes, 0 to len(buf)
 	done  func(string)
 }
 
@@ -56,6 +57,7 @@ type app struct {
 	file   string
 	dirty  bool
 	style  int
+	heads  int // index into heads, for new arrows
 	tool   int
 	drag   *drag
 	menu   *menu
@@ -86,6 +88,7 @@ type app struct {
 	swallow   bool       // ignore mouse events until the button is released
 	shift     bool       // Shift held during the last mouse event
 	snap      int        // shape a dragged line end would attach to, or -1
+	snapFrom  int        // shape a new line starts on, or -1
 	clip      []object   // what ^C copied, moved to 0,0
 	clipText  string     // its picture, as put on the system clipboard
 	showPanel bool
@@ -117,12 +120,12 @@ func (a *app) setMeta(m docMeta) {
 }
 
 func newApp(s tcell.Screen) *app {
-	return &app{s: s, pal: slices.Clone(defaultPal), pages: []page{{}}, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, dropAt: -1, showPanel: true, exp: defaultExport()}
+	return &app{s: s, pal: slices.Clone(defaultPal), pages: []page{{}}, sel: -1, selFor: -1, selset: map[int]bool{}, hover: -1, pressed: -1, edit: -1, snap: -1, snapFrom: -1, dropAt: -1, showPanel: true, exp: defaultExport()}
 }
 
 func (a *app) reset() {
 	n := newApp(a.s)
-	n.style, n.tool, n.showPanel, n.pal = a.style, a.tool, a.showPanel, a.pal // a new drawing keeps the palette
+	n.style, n.tool, n.heads, n.showPanel, n.pal = a.style, a.tool, a.heads, a.showPanel, a.pal // a new drawing keeps the palette
 	*a = *n
 }
 
@@ -135,7 +138,14 @@ func (a *app) say(m string)    { a.msg, a.msgErr = m, false }
 func (a *app) sayErr(m string) { a.msg, a.msgErr = m, true }
 
 func (a *app) ask(label, initial string, done func(string)) {
-	a.prompt = &prompt{label: label, buf: []rune(initial), done: done}
+	a.prompt = &prompt{label: label, buf: []rune(initial), cur: runeLen(initial), done: done}
+}
+
+// askName is ask for a file name. The cursor starts before the extension,
+// so fle1.adraw becomes fle2.adraw with a Backspace and a 2.
+func (a *app) askName(label, initial string, done func(string)) {
+	a.ask(label, initial, done)
+	a.prompt.cur = runeLen(strings.TrimSuffix(initial, filepath.Ext(initial)))
 }
 
 // ---- undo ----
@@ -213,18 +223,31 @@ func expandHome(p string) string {
 	return p
 }
 
+// save writes the drawing to its file, and asks for a name only if it has
+// none yet.
 func (a *app) save() {
 	if a.file == "" {
-		a.askPath("Save as: ", ".adraw", a.suggest, a.write)
+		a.saveAs()
 		return
 	}
 	a.write(a.file)
 }
 
+// saveAs, on ^S, asks for a name every time, starting with the current one.
+// Enter saves in place; an edited name saves a copy there and carries on
+// with that file.
+func (a *app) saveAs() {
+	name := a.file
+	if name == "" {
+		name = a.suggest
+	}
+	a.askPath("Save as: ", ".adraw", name, a.write)
+}
+
 // askPath asks for a file name, makes sure it ends in ext, and asks before
-// replacing a file that exists.
+// replacing a file that exists, unless it is the drawing's own file.
 func (a *app) askPath(label, ext, initial string, done func(string)) {
-	a.ask(label, initial, func(name string) {
+	a.askName(label, initial, func(name string) {
 		name = expandHome(strings.TrimSpace(name))
 		if name == "" {
 			a.say("Cancelled.")
@@ -240,7 +263,7 @@ func (a *app) askPath(label, ext, initial string, done func(string)) {
 // unlessExists calls done(path) right away if path doesn't exist, and
 // otherwise asks first.
 func (a *app) unlessExists(path string, done func(string)) {
-	if _, err := os.Stat(path); err != nil {
+	if _, err := os.Stat(path); err != nil || (a.file != "" && sameFile(path, a.file)) {
 		done(path)
 		return
 	}
@@ -338,7 +361,7 @@ func (a *app) key(ev *tcell.EventKey) bool {
 		a.reset()
 		a.say("New file. Draw, then ^S to name it and save.")
 	case tcell.KeyCtrlS:
-		a.save()
+		a.saveAs()
 	case tcell.KeyCtrlZ:
 		a.undoOp()
 	case tcell.KeyCtrlY:
@@ -752,11 +775,27 @@ func (a *app) promptKey(ev *tcell.EventKey) {
 		a.prompt = nil
 		a.say("Cancelled.")
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if len(p.buf) > 0 {
-			p.buf = p.buf[:len(p.buf)-1]
+		if p.cur > 0 {
+			p.buf = slices.Delete(p.buf, p.cur-1, p.cur)
+			p.cur--
 		}
+	case tcell.KeyDelete, tcell.KeyCtrlD:
+		if p.cur < len(p.buf) {
+			p.buf = slices.Delete(p.buf, p.cur, p.cur+1)
+		}
+	case tcell.KeyLeft, tcell.KeyCtrlB:
+		p.cur = max(p.cur-1, 0)
+	case tcell.KeyRight, tcell.KeyCtrlF:
+		p.cur = min(p.cur+1, len(p.buf))
+	case tcell.KeyHome, tcell.KeyCtrlA:
+		p.cur = 0
+	case tcell.KeyEnd, tcell.KeyCtrlE:
+		p.cur = len(p.buf)
+	case tcell.KeyCtrlU: // clear
+		p.buf, p.cur = nil, 0
 	case tcell.KeyRune:
-		p.buf = append(p.buf, ev.Rune())
+		p.buf = slices.Insert(p.buf, p.cur, ev.Rune())
+		p.cur++
 	}
 }
 
@@ -940,6 +979,13 @@ func (a *app) press(x, y int, right bool) {
 	if i >= 0 && a.objs[i].Kind == "fill" && a.labelBoxAt(x, y) > i {
 		i = -1 // the inside of a box drawn over a fill counts as empty
 	}
+	if i >= 0 && isLine(tools[a.tool].kind) && canTake(a.objs[i]) && !a.shift {
+		// The line and arrow tools start a line on a shape rather than
+		// move it. A click without a drag still picks the shape.
+		d.mode, d.obj = dCreate, i
+		a.sel = -1
+		return
+	}
 	if i >= 0 {
 		if a.shift { // Shift-click adds or removes; it never drags
 			d.mode = dPanel
@@ -1021,18 +1067,20 @@ func (a *app) dragTo(x, y int) {
 		a.objs[d.obj] = o
 		a.snap = -1
 		if isLine(o.Kind) { // the end being dragged attaches as it goes
-			a.detect(d.obj)
-			ex, ey := a.objs[d.obj].X0, a.objs[d.obj].Y0
+			ln := a.objs[d.obj]
+			from, to := a.connect(&ln, d.obj, [2]bool{!d.h.x1, d.h.x1})
+			a.objs[d.obj] = ln
+			a.snap = from
 			if d.h.x1 {
-				ex, ey = a.objs[d.obj].X1, a.objs[d.obj].Y1
+				a.snap = to
 			}
-			a.snap, _, _ = anchorAt(a.objs, d.obj, ex, ey)
 		}
 		a.reattach(map[int]bool{d.obj: true})
 	case dCreate:
-		a.snap = -1
-		if isLine(tools[a.tool].kind) {
-			a.snap, _, _ = anchorAt(a.objs, -1, x, y)
+		a.snap, a.snapFrom = -1, -1
+		if isLine(tools[a.tool].kind) && d.moved() {
+			o := a.newShape(d)
+			a.snapFrom, a.snap = a.connect(&o, -1, [2]bool{true, true})
 		}
 	}
 }
@@ -1040,13 +1088,14 @@ func (a *app) dragTo(x, y int) {
 // newShape makes the object a drag (or, for a widget, a click) creates.
 func (a *app) newShape(d *drag) object {
 	o := object{Kind: tools[a.tool].kind, X0: d.x0, Y0: d.y0, X1: d.x1, Y1: d.y1, Style: a.style}
+	if o.Kind == "arrow" {
+		o.Heads = a.heads
+	}
 	if a.shift && o.squarable() {
 		o.X1, o.Y1 = symmetric(d.x0, d.y0, d.x1, d.y1)
 	}
 	if isLine(o.Kind) {
-		a.ensureIDs()
-		_, o.From, _ = anchorAt(a.objs, -1, o.X0, o.Y0)
-		_, o.To, _ = anchorAt(a.objs, -1, o.X1, o.Y1)
+		a.connect(&o, -1, [2]bool{true, true})
 	}
 	if def, ok := widgets[o.Kind]; ok {
 		o.Text, o.Value = append([]string(nil), def.label...), def.value
@@ -1062,7 +1111,7 @@ func (a *app) widgetTool() bool { return isWidget(tools[a.tool].kind) }
 
 func (a *app) release() {
 	d := a.drag
-	a.drag, a.pressed, a.snap = nil, -1, -1
+	a.drag, a.pressed, a.snap, a.snapFrom = nil, -1, -1, -1
 	drop := a.dropAt
 	a.dropAt = -1
 	switch d.mode {
@@ -1113,6 +1162,11 @@ func (a *app) release() {
 				a.startEditing(i)
 				return
 			}
+		}
+		if !d.moved() && d.obj >= 0 { // a click on a shape's border picks it
+			a.sel = d.obj
+			a.syncSel()
+			return
 		}
 		if !d.moved() && !a.widgetTool() {
 			// A click on empty space puts out the text cursor.
@@ -1208,7 +1262,7 @@ func (a *app) objStyle(i int, doomed map[int]bool) tcell.Style {
 		st = st.Foreground(colPressed).Bold(true)
 	case a.isSel(i):
 		st = st.Foreground(colSel).Bold(true)
-	case a.hovered(i) || i == a.snap:
+	case a.hovered(i) || i == a.snap || i == a.snapFrom:
 		st = st.Foreground(colHover)
 	}
 	return st
@@ -1280,8 +1334,8 @@ func (a *app) render() {
 	}
 	s.HideCursor()
 	if a.prompt != nil {
-		end := a.text(1, sh-2, a.prompt.label+string(a.prompt.buf), bar.Bold(true))
-		s.ShowCursor(min(end, sw-1), sh-2)
+		a.text(1, sh-2, a.prompt.label+string(a.prompt.buf), bar.Bold(true))
+		s.ShowCursor(min(1+runeLen(a.prompt.label)+a.prompt.cur, sw-1), sh-2)
 	} else if a.aligning {
 		a.text(1, sh-2, alignHelp, bar.Bold(true).Foreground(tcell.ColorYellow))
 	} else if a.layerCmd != 0 {
@@ -1304,7 +1358,11 @@ func (a *app) render() {
 		if a.menu != nil {
 			ps = bar.Foreground(tcell.ColorYellow).Bold(true)
 		}
-		x = a.text(x+2, sh-2, "drag: "+tools[a.previewTool()].name+"  "+styles[a.previewStyle()].sample(), ps)
+		drag := "drag: " + tools[a.previewTool()].name + "  " + styles[a.previewStyle()].sample()
+		if a.previewTool() == toolArrow {
+			drag += "  heads " + heads[a.previewHeads()].sample
+		}
+		x = a.text(x+2, sh-2, drag, ps)
 		// Position readout, right-aligned. The message gets the room between.
 		pos := a.readout()
 		posX := max(sw-runeLen(pos)-1, 0)

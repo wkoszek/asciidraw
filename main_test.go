@@ -109,11 +109,65 @@ func TestDrawTypeSave(t *testing.T) {
 		t.Fatalf("export should not prompt and should confirm: %q", a.msg)
 	}
 
-	// A second ^S saves to the same file without asking.
+	// A second ^S offers the same name, and Enter saves there without
+	// asking to overwrite.
 	drag2(a, 20, 1, 25, 1)
+	file := a.file
 	ctrl(a, tcell.KeyCtrlS)
-	if a.prompt != nil || a.dirty {
-		t.Fatal("second save should not prompt")
+	if a.prompt == nil || string(a.prompt.buf) != file {
+		t.Fatalf("second save should offer %s", file)
+	}
+	ctrl(a, tcell.KeyEnter)
+	if a.prompt != nil || a.dirty || a.file != file {
+		t.Fatalf("Enter should save in place: prompt=%v dirty=%v file=%s", a.prompt != nil, a.dirty, a.file)
+	}
+}
+
+// ^S starts the cursor before the extension, so the next version of a file
+// is a Backspace and a digit away. The old file stays as it was.
+func TestSaveAsNextVersion(t *testing.T) {
+	dir := t.TempDir()
+	a := testApp(t)
+	a.file = filepath.Join(dir, "fle1.adraw")
+	drag2(a, 1, 1, 5, 3)
+	ctrl(a, tcell.KeyCtrlS)
+	ctrl(a, tcell.KeyEnter)
+	drag2(a, 10, 1, 15, 3)
+	ctrl(a, tcell.KeyCtrlS)
+	ctrl(a, tcell.KeyBackspace2)
+	typeStr(a, "2")
+	if got := string(a.prompt.buf); got != filepath.Join(dir, "fle2.adraw") {
+		t.Fatalf("edited name: %s", got)
+	}
+	ctrl(a, tcell.KeyEnter)
+	if a.file != filepath.Join(dir, "fle2.adraw") || a.dirty {
+		t.Fatalf("saved as %s dirty=%v", a.file, a.dirty)
+	}
+	one, _, _, _, err := loadDrawing(filepath.Join(dir, "fle1.adraw"))
+	two, _, _, _, err2 := loadDrawing(a.file)
+	if err != nil || err2 != nil || len(one[0]) != 1 || len(two[0]) != 2 {
+		t.Fatalf("fle1 has %d objects, fle2 %d: %v %v", len(one[0]), len(two[0]), err, err2)
+	}
+	// Going back to an existing name still asks first.
+	ctrl(a, tcell.KeyCtrlS)
+	ctrl(a, tcell.KeyBackspace2)
+	typeStr(a, "1")
+	ctrl(a, tcell.KeyEnter)
+	if a.prompt == nil || !strings.Contains(a.prompt.label, "Overwrite") {
+		t.Fatal("saving over another file should ask")
+	}
+	// The cursor moves, and typing goes where it is.
+	ctrl(a, tcell.KeyEscape)
+	ctrl(a, tcell.KeyCtrlS)
+	ctrl(a, tcell.KeyCtrlU)
+	typeStr(a, "ac")
+	ctrl(a, tcell.KeyLeft)
+	typeStr(a, "b")
+	ctrl(a, tcell.KeyHome)
+	typeStr(a, "x")
+	ctrl(a, tcell.KeyDelete)
+	if got := string(a.prompt.buf); got != "xbc" {
+		t.Fatalf("editing: %q", got)
 	}
 }
 
@@ -679,6 +733,7 @@ func TestExportAsksBeforeOverwrite(t *testing.T) {
 	}
 	// Saved under a new name, ^E follows it.
 	ctrl(a, tcell.KeyCtrlS) // saves to ui.yaml
+	ctrl(a, tcell.KeyEnter)
 	a.file = ""
 	ctrl(a, tcell.KeyCtrlS)
 	typeStr(a, filepath.Join(dir, "other"))
@@ -1141,6 +1196,139 @@ func TestDragLineEndToAttach(t *testing.T) {
 	}
 }
 
+func TestArrowFromInsideABox(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)
+	drag2(a, 30, 0, 40, 4)
+	a.tool = toolArrow
+	// Press inside A and drag to inside B: both light up, and neither moves.
+	press(a, 5, 2, tcell.Button1)
+	press(a, 35, 3, tcell.Button1)
+	if a.snapFrom != 0 || a.snap != 1 {
+		t.Fatalf("both boxes should light: from=%d to=%d", a.snapFrom, a.snap)
+	}
+	press(a, 35, 3, tcell.ButtonNone)
+	if len(a.objs) != 3 || a.objs[0].X0 != 0 || a.objs[1].X0 != 30 {
+		t.Fatalf("the boxes should stay put: %+v", a.objs)
+	}
+	ar := a.objs[2]
+	if ar.From.ID != a.objs[0].ID || ar.From.Side != 'r' || ar.To.ID != a.objs[1].ID || ar.To.Side != 'l' {
+		t.Fatalf("anchors: %+v", ar)
+	}
+	// The tail sits on A's edge as a tee, the head just outside B, both
+	// halfway down their sides.
+	if ar.X0 != 10 || ar.Y0 != 2 || ar.X1 != 29 || ar.Y1 != 2 || a.snap != -1 || a.snapFrom != -1 {
+		t.Fatalf("ends: %+v", ar)
+	}
+	// A box below gets the arrow on its top.
+	a.tool = toolBox
+	drag2(a, 0, 12, 10, 16)
+	a.tool = toolArrow
+	drag2(a, 5, 2, 6, 14)
+	if ar := a.objs[4]; ar.From.Side != 'b' || ar.To.Side != 't' || ar.Y1 != 11 {
+		t.Fatalf("down: %+v", ar)
+	}
+}
+
+func TestLineToolInsideOneBox(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 20, 6)
+	a.tool = toolLine
+	drag2(a, 2, 3, 18, 3) // a divider inside the box
+	if o := a.objs[1]; o.Kind != "line" || o.From.ID != 0 || o.To.ID != 0 || o.X0 != 2 || o.X1 != 18 {
+		t.Fatalf("a line inside one box stays loose: %+v", a.objs)
+	}
+	ctrl(a, tcell.KeyEscape)
+	click(a, 20, 1) // a click on the border still picks the box
+	if len(a.objs) != 2 || a.sel != 0 {
+		t.Fatalf("click on border: sel=%d %+v", a.sel, a.objs)
+	}
+}
+
+func TestArrowHeads(t *testing.T) {
+	a := testApp(t)
+	ctrl(a, tcell.KeyCtrlT)
+	a.menu.cur = itemOfHead(2) // both
+	ctrl(a, tcell.KeyEnter)
+	if a.tool != toolArrow || a.heads != 2 {
+		t.Fatalf("picking heads picks the Arrow tool: tool=%d heads=%d", a.tool, a.heads)
+	}
+	a.style = 1
+	drag2(a, 1, 0, 6, 0)
+	if got, want := a.ascii(), " <────>\n"; got != want {
+		t.Fatalf("both:\n%q\nwant\n%q", got, want)
+	}
+	// With the arrow selected, picking other heads changes it, and undo
+	// puts it back.
+	ctrl(a, tcell.KeyCtrlT)
+	a.menu.cur = itemOfHead(1) // start
+	ctrl(a, tcell.KeyEnter)
+	if got, want := a.ascii(), " <─────\n"; got != want {
+		t.Fatalf("start:\n%q\nwant\n%q", got, want)
+	}
+	ctrl(a, tcell.KeyCtrlZ)
+	if a.objs[0].Heads != 2 {
+		t.Fatalf("undo: %+v", a.objs[0])
+	}
+	a.objs[0].Heads = 3 // none
+	if got, want := a.ascii(), " ──────\n"; got != want {
+		t.Fatalf("none:\n%q\nwant\n%q", got, want)
+	}
+	// Saved by name; an arrow saved without heads keeps one on its end.
+	a.objs[0].Heads = 1
+	data := string(must(encodeYAML(a.objs)))
+	if !strings.Contains(data, "heads: start") {
+		t.Fatalf("yaml:\n%s", data)
+	}
+	back, err := decodeYAML([]byte(strings.Replace(data, "heads: start", "", 1)))
+	if err != nil || back[0].Heads != 0 || !back[0].headAt(true) || back[0].headAt(false) {
+		t.Fatalf("old file: %v %+v", err, back)
+	}
+	if _, err := decodeYAML([]byte(strings.Replace(data, "heads: start", "heads: sideways", 1))); err == nil {
+		t.Fatal("unknown heads should fail")
+	}
+}
+
+func TestArrowHeadsBothBetweenBoxes(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 0, 0, 10, 4)
+	drag2(a, 30, 0, 40, 4)
+	a.tool, a.heads = toolArrow, 2
+	drag2(a, 5, 2, 35, 2)
+	// Both heads sit just outside their boxes.
+	if ar := a.objs[2]; ar.X0 != 11 || ar.X1 != 29 || ar.From.Gap != 1 || ar.To.Gap != 1 {
+		t.Fatalf("ends: %+v", ar)
+	}
+}
+
+func TestSameSidesMakeAU(t *testing.T) {
+	a := testAppSized(t, 100, 30)
+	drag2(a, 2, 4, 6, 6)
+	drag2(a, 20, 4, 24, 6)
+	a.tool = toolArrow
+	drag2(a, 4, 3, 22, 3) // top to top
+	a.tool = toolLine
+	drag2(a, 4, 7, 22, 7) // bottom to bottom
+	want := "" +
+		"\n" +
+		"    +-----------------+\n" +
+		"    |                 |\n" +
+		"    |                 v\n" +
+		"  +---+             +---+\n" +
+		"  |   |             |   |\n" +
+		"  +---+             +---+\n" +
+		"    |                 |\n" +
+		"    |                 |\n" +
+		"    +-----------------+\n"
+	if got := a.ascii(); got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	// Left to left goes round the left, and never past column 0.
+	if got := (object{X0: 1, Y0: 0, X1: 1, Y1: 9, From: anchor{ID: 1, Side: 'l'}, To: anchor{ID: 2, Side: 'l'}}).route(); !reflect.DeepEqual(got, [][2]int{{1, 0}, {0, 0}, {0, 9}, {1, 9}}) {
+		t.Fatalf("left: %v", got)
+	}
+}
+
 func TestAttachmentsSaveAndPaste(t *testing.T) {
 	fakeClipboard(t)
 	a := joined(t)
@@ -1567,6 +1755,7 @@ func TestAutosaveAndRecover(t *testing.T) {
 	}
 	// Saving clears the copy.
 	ctrl(b, tcell.KeyCtrlS)
+	ctrl(b, tcell.KeyEnter)
 	if _, err := os.Stat(recoverPath(file)); err == nil {
 		t.Fatal("saving should delete the recovery copy")
 	}

@@ -26,6 +26,32 @@ type object struct {
 
 	HAlign, VAlign int // where a box's or oval's label sits: -1 left/top, 0 center, 1 right/bottom
 	Layer          int // 0 to 61, named 0-9, a-z, A-Z; see layers.go
+	Heads          int // which ends of an arrow get a head; index into heads
+}
+
+// heads are the ways an arrow can end. The first is the default, so a
+// drawing saved before there was a choice keeps its arrows as they were.
+var heads = []struct{ name, sample string }{
+	{"end", "─────>"},
+	{"start", "<─────"},
+	{"both", "<────>"},
+	{"none", "──────"},
+}
+
+// headAt says whether the arrow has a head on its start or its end.
+func (o object) headAt(end bool) bool {
+	if o.Kind != "arrow" {
+		return false
+	}
+	switch heads[min(max(o.Heads, 0), len(heads)-1)].name {
+	case "both":
+		return true
+	case "start":
+		return !end
+	case "end":
+		return end
+	}
+	return false
 }
 
 var kindNames = map[string]string{"box": "Box", "oval": "Oval", "line": "Line", "arrow": "Arrow", "text": "Text", "fill": "Fill"}
@@ -131,7 +157,7 @@ func (o object) draw(c *canvas) {
 			drawWidget(c, o, st)
 		}
 	case "line", "arrow":
-		drawPath(c, o.route(), st, o.Kind == "arrow")
+		drawPath(c, o.route(), st, o.headAt(false), o.headAt(true))
 	case "text":
 		// Spaces are see-through, so text can sit on top of other shapes.
 		for i, line := range o.Text {

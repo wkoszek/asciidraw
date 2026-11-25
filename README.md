@@ -111,7 +111,10 @@ In this README, `^T` means Ctrl+T.
   style (ascii, line, round, double). Use the up and down arrows to move,
   Space to pick, Enter to pick and close, and Esc to close. You can also
   click a row. The status bar shows a sample of each style before you pick
-  it.
+  it. Under the widgets, **Arrow heads** picks where an arrow gets a head:
+  on the end (`──>`, the default), the start (`<──`), both (`<─>`) or
+  neither. Picking one also picks the Arrow tool, and changes any arrows
+  that are selected.
 - **Shift** while you drag a box or an oval makes it square or round.
 
 A terminal cell is about twice as tall as it is wide. So a circle 10 rows
@@ -119,7 +122,8 @@ tall is about 20 columns wide.
 
 A line goes sideways from where you press, turns once, then goes up or down
 to where you let go. Drag straight across or straight down for a line with
-no turn. An arrow is the same line with a head on the end. A line can also
+no turn. An arrow is the same line with a head on the end, the start or
+both; see ^T above. A line can also
 attach to shapes and follow them when they move. An attached line picks its
 own turns; see Attached lines below.
 
@@ -316,16 +320,28 @@ stay as they are. One ^Z undoes the move.
 The YAML saves the spot as `place`, such as `place: top left`. When you
 pick center, the file has no `place`.
 
+An arrow saves its heads the same way: `heads: start`, `heads: both` or
+`heads: none`. An arrow with a head on its end, the default, has no
+`heads`.
+
 ### Attached lines
 
-Pick Line or Arrow. Start in the empty cell just outside a shape, and end
-on another shape's edge or just outside it. Each end attaches to the shape
-it touches. While you drag, that shape lights up. Lines attach to boxes and
-widgets, and to the rectangle around an oval. Text and other lines don't
-take attachments.
+Pick Line or Arrow. Press on a shape and drag to another shape. Both
+shapes light up while you drag, and when you let go each end attaches. With
+these two tools a press on a shape starts a line; it doesn't move the shape.
+A click on a shape's border without a drag still selects it. Lines attach
+to boxes and widgets, and to the rectangle around an oval. Text and other
+lines don't take attachments.
 
-Don't start on the edge itself: pressing on a shape grabs the shape and
-moves it.
+Where you press or let go decides where the end lands:
+
+- On a shape's edge, or the empty cell just outside it, the end stays
+  right there.
+- Anywhere further inside, the end moves to the middle of the side that
+  faces the other end. A plain end joins the edge as a tee. An
+  arrowhead sits just outside the edge, where you can see it.
+- If both ends are inside the same shape, the line stays loose. That is how
+  you draw a line inside a box.
 
 ```
 ╭─────────╮
@@ -341,15 +357,30 @@ moves to the end of the side.
 
 The line picks its turns from where its ends are attached:
 
-- If both ends are on left or right sides, it turns twice, halfway between
-  them, as above.
-- If both ends are on tops or bottoms, it turns twice, halfway between them.
-- Otherwise it turns once.
+- If one end is on a left side and the other on a right side, it turns
+  twice, halfway between them, as above.
+- If one end is on a top and the other on a bottom, it turns twice,
+  halfway between them.
+- If one end is on a left or right side and the other on a top or bottom,
+  it turns once.
+- If both ends are on the same kind of side, such as two tops, it makes a
+  U. It leaves both shapes the same way, runs two cells past the end that
+  sticks out further, and comes back:
+
+```
+    +-----------------+
+    |                 |
+    |                 v
+  +---+             +---+
+  |   |             |   |
+  +---+             +---+
+```
+
+  To get one, start just above one box and end just above the other.
 
 To change what a line is attached to:
 
-- Drag one of its ends onto a shape's edge, or just outside it, to attach
-  that end. If the line is in a group, click it twice first, so that it is
+- Drag one of its ends onto a shape to attach that end. If the line is in a group, click it twice first, so that it is
   selected alone.
 - Drag an end away from its shape to detach it. Moving the whole line by
   itself, with the mouse or the arrow keys, checks both ends again where
@@ -737,8 +768,17 @@ write it wins.
 
 ## Files
 
-**^S** saves the drawing in an `.adraw` file. Type a name without an
-extension and ^S adds `.adraw`. An `.adraw` file is YAML: a list of
+**^S** saves the drawing in an `.adraw` file. It asks for a name every
+time, and starts with the drawing's own name, so Enter saves in place.
+Type a name without an extension and ^S adds `.adraw`.
+
+The cursor starts just before the extension. That makes a new version
+easy: in `fle1.adraw`, press Backspace, type `2` and Enter, and the
+drawing goes to `fle2.adraw`. `fle1.adraw` stays as it was, and from then
+on you're working in `fle2.adraw`. A name that belongs to another file
+asks before it overwrites. In the name, Left, Right, Home and End move the
+cursor, Delete removes the letter under it, ^U clears the line and Esc
+cancels. An `.adraw` file is YAML: a list of
 pages, each with one entry per shape. You can use a `.yaml` or `.yml`
 extension instead. asciidraw treats all three the same and keeps the
 extension you typed. Coordinates are columns and rows, counted from 0 at the top left.
@@ -824,8 +864,9 @@ a row. You can also click.
 
 At the bottom of the window are two buttons, Save and Cancel.
 
-- **Save** keeps your changes and saves the whole drawing, just as ^S
-  does. If the drawing has no file name yet, Save asks for one first.
+- **Save** keeps your changes and saves the whole drawing to its file,
+  without asking for a name. If the drawing has no file name yet, Save
+  asks for one first.
 - **Cancel** brings back the settings you had when you opened the window.
 
 Enter presses the button under the cursor. On any other row, Enter means

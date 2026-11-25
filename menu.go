@@ -7,32 +7,43 @@ import (
 )
 
 // The ^T menu has two columns: shape tools and styles on the left, widgets
-// on the right. The cursor walks one list holding all of them, in that
-// order. The status bar previews whatever the cursor is on.
+// and arrowheads on the right. The cursor walks one list holding all of
+// them, in that order. The status bar previews whatever the cursor is on.
 
 type menu struct{ cur int } // index into menuItems()
 
+// What a menu row picks.
+const (
+	itemTool = iota
+	itemStyle
+	itemHead
+)
+
 type menuItem struct {
-	style bool // a style, not a tool
-	idx   int  // into styles or tools
+	kind int // itemTool, itemStyle or itemHead
+	idx  int // into tools, styles or heads
 }
 
 func menuItems() []menuItem {
 	var items []menuItem
 	for i := 0; i < shapeTools; i++ {
-		items = append(items, menuItem{false, i})
+		items = append(items, menuItem{itemTool, i})
 	}
 	for i := range styles {
-		items = append(items, menuItem{true, i})
+		items = append(items, menuItem{itemStyle, i})
 	}
 	for i := shapeTools; i < len(tools); i++ {
-		items = append(items, menuItem{false, i})
+		items = append(items, menuItem{itemTool, i})
+	}
+	for i := range heads {
+		items = append(items, menuItem{itemHead, i})
 	}
 	return items
 }
 
-func itemOfTool(t int) int  { return indexOf(menuItem{false, t}) }
-func itemOfStyle(s int) int { return indexOf(menuItem{true, s}) }
+func itemOfTool(t int) int  { return indexOf(menuItem{itemTool, t}) }
+func itemOfStyle(s int) int { return indexOf(menuItem{itemStyle, s}) }
+func itemOfHead(h int) int  { return indexOf(menuItem{itemHead, h}) }
 
 func indexOf(it menuItem) int {
 	for i, m := range menuItems() {
@@ -69,6 +80,10 @@ func (a *app) menuColumns() (left, right []menuLine) {
 	right = []menuLine{{" Widgets", -1}}
 	for i := shapeTools; i < len(tools); i++ {
 		right = append(right, tool(i))
+	}
+	right = append(right, menuLine{"", -1}, menuLine{" Arrow heads", -1})
+	for i, h := range heads {
+		right = append(right, menuLine{fmt.Sprintf(" %s %s  %s", mark(i == a.heads), h.sample, h.name), itemOfHead(i)})
 	}
 	return left, right
 }
@@ -136,8 +151,11 @@ func (a *app) openMenu() {
 // the menu cursor while the menu is open, the picked ones otherwise.
 func (a *app) previewTool() int {
 	if a.menu != nil {
-		if it := menuItems()[a.menu.cur]; !it.style {
+		if it := menuItems()[a.menu.cur]; it.kind == itemTool {
 			return it.idx
+		}
+		if menuItems()[a.menu.cur].kind == itemHead {
+			return toolArrow
 		}
 	}
 	return a.tool
@@ -145,27 +163,64 @@ func (a *app) previewTool() int {
 
 func (a *app) previewStyle() int {
 	if a.menu != nil {
-		if it := menuItems()[a.menu.cur]; it.style {
+		if it := menuItems()[a.menu.cur]; it.kind == itemStyle {
 			return it.idx
 		}
 	}
 	return a.style
 }
 
+func (a *app) previewHeads() int {
+	if a.menu != nil {
+		if it := menuItems()[a.menu.cur]; it.kind == itemHead {
+			return it.idx
+		}
+	}
+	return a.heads
+}
+
+// pick takes the item on a menu row. Picking arrowheads picks the Arrow
+// tool too, and changes any arrows that are selected.
 func (a *app) pick(item int) {
 	it := menuItems()[item]
-	if it.style {
+	switch it.kind {
+	case itemStyle:
 		a.style = it.idx
-	} else {
+	case itemHead:
+		a.heads, a.tool = it.idx, toolArrow
+		a.restyleHeads()
+	default:
 		a.tool = it.idx
 	}
-	a.say(fmt.Sprintf("Tool: %s, style: %s", tools[a.tool].name, styles[a.style].name))
+	msg := fmt.Sprintf("Tool: %s, style: %s", tools[a.tool].name, styles[a.style].name)
+	if a.tool == toolArrow {
+		msg += ", heads: " + heads[a.heads].name
+	}
+	a.say(msg)
+}
+
+// restyleHeads gives the selected arrows the heads picked for new ones.
+func (a *app) restyleHeads() {
+	before := cloneObjs(a.objs)
+	changed := false
+	for _, i := range a.selected() {
+		if a.objs[i].Kind == "arrow" && a.objs[i].Heads != a.heads {
+			a.objs[i].Heads = a.heads
+			changed = true
+		}
+	}
+	if changed {
+		a.commit(before)
+	}
 }
 
 func (a *app) menuKey(ev *tcell.EventKey) {
 	m := a.menu
 	n := len(menuItems())
-	inWidgets := func() bool { it := menuItems()[m.cur]; return !it.style && it.idx >= shapeTools }
+	inWidgets := func() bool { // in the right column
+		it := menuItems()[m.cur]
+		return it.kind == itemHead || it.kind == itemTool && it.idx >= shapeTools
+	}
 	switch ev.Key() {
 	case tcell.KeyUp:
 		m.cur = (m.cur + n - 1) % n

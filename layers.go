@@ -136,7 +136,7 @@ func (a *app) sortLayers() {
 	}
 	a.selset = set
 	a.sel, a.selFor = re(a.sel), re(a.selFor)
-	a.hover, a.pressed, a.edit, a.snap = re(a.hover), re(a.pressed), re(a.edit), re(a.snap)
+	a.hover, a.pressed, a.edit, a.snap, a.snapFrom = re(a.hover), re(a.pressed), re(a.edit), re(a.snap), re(a.snapFrom)
 }
 
 // pageLayers gives every page's layer state, the one on screen included.

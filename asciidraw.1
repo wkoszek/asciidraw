@@ -142,7 +142,10 @@ With the Erase tool, a click deletes.
 Delete every shape the rectangle touches, with any tool.
 .It ^T
 Open the menu of tools (Box, Oval, Line, Arrow, Fill, Erase, Select),
-widgets and styles (ascii, line, round, double).
+widgets, styles (ascii, line, round, double) and arrow heads (end, start,
+both, none).
+Picking arrow heads also picks the Arrow tool and changes the selected
+arrows.
 .It L
 Open the library of ready-made pieces, with two tabs: builtin and custom.
 Left and right switch tabs.
@@ -161,13 +164,29 @@ see
 A line goes sideways from where you press, turns once, then goes up or down
 to where you let go.
 Drag straight across or straight down for a line with no turn.
+An arrow is the same line with a head on the end, the start, both or
+neither, as picked under arrow heads in the ^T menu.
+The drawing file saves any choice but the end as
+.Ql heads: start ,
+.Ql heads: both
+or
+.Ql heads: none .
 .Pp
-To attach a line, start it in the empty cell just outside a shape, and end
-it on another shape's edge or just outside it.
-Don't start on the edge itself: pressing on a shape moves the shape.
+To attach a line, press on a shape with the Line or Arrow tool and drag to
+another shape.
+Both shapes light up while you drag.
+With these two tools a press on a shape starts a line instead of moving the
+shape; a click on its border without a drag still selects it.
+An end on a shape's edge, or just outside it, attaches right there.
+An end further inside moves to the middle of the side that faces the other
+end.
+An end inside the same shape as the other end stays loose, so you can draw a
+line inside a box.
 Lines attach to boxes, widgets, and the rectangle around an oval.
 An attached end follows its shape when the shape moves or changes size, and
 the line picks its own turns.
+Two ends on the same kind of side, such as two tops, make a U that goes two
+cells past the end that sticks out further.
 .Pp
 Where lines, box edges, window borders and tall button borders meet, they
 join:
@@ -352,6 +371,16 @@ The status bar shows the current layer and the hidden and locked ones.
 .Bl -tag -width "PgUp, PgDn"
 .It ^S
 Save the drawing.
+It asks for a name every time, starting with the drawing's own name with
+the cursor before the extension, so Enter saves in place and Backspace and
+a digit turn
+.Pa fle1.adraw
+into
+.Pa fle2.adraw .
+The old file stays, and the drawing carries on in the new one.
+A name that belongs to another file asks before it overwrites.
+Left, Right, Home and End move the cursor, Delete removes a letter, ^U
+clears the name and Esc cancels.
 A name typed with no extension gets
 .Pa .adraw .
 A name ending in
@@ -386,8 +415,8 @@ light or dark theme, and whether a drawing of several pages goes in one
 file or in one file per page, such as
 .Pa mock_page0.png .
 The settings window ends in two buttons, Save and Cancel.
-Save keeps the changes and saves the whole drawing, as ^S does.
-It asks for a name if the drawing has none.
+Save keeps the changes and saves the whole drawing to its file without
+asking for a name, unless the drawing has none.
 Cancel brings back the settings you had when you opened the window.
 Enter presses the button under the cursor, and means Save on any other
 row.

@@ -4,8 +4,21 @@ Each release gets a section here, newest first. `make release` copies the
 section for the tag being released into the GitHub release notes, so write it
 before you tag.
 
-## Unreleased
+## v0.2.0 (2026-11-25)
 
+- ^S asks for a name every time, starting with the drawing's own name and
+  the cursor before the extension. Enter saves in place; Backspace and a
+  `2` turn `fle1.adraw` into `fle2.adraw`. Typing in any prompt can now
+  move the cursor with Left, Right, Home and End.
+- A line whose ends attach to the same kind of side, such as the tops of
+  two boxes, makes a U with two turns instead of running along the edges.
+- The ^T menu picks arrow heads: on the end, the start, both or neither.
+  Picking one picks the Arrow tool and changes the selected arrows. The
+  drawing file saves the choice as `heads`.
+- With the Line or Arrow tool, press anywhere on a shape and drag to
+  another shape to join them. Both shapes light up while you drag. An end
+  dropped inside a shape moves to the middle of the side that faces the
+  other end. A press on a shape no longer moves it with these tools.
 - `a` lines up the selected shapes by their edges or centers, or spreads
   them out evenly. A window lists the choices, with pictures for
   spreading out, and you can click one. `[`, `|` and `]` line up left
@@ -56,7 +69,7 @@ before you tag.
   for all pages or a file per page, such as `mock_page0.png`. They are
   saved in an `export` section of the drawing file.
 - The `S` settings window ends in Save and Cancel buttons. Save saves the
-  whole drawing, as ^S does. Cancel, or Esc, brings back the settings you
+  whole drawing to its file. Cancel, or Esc, brings back the settings you
   had when you opened the window. Enter presses the button under the
   cursor, and means Save on any other row.
 - PNGs are stored with a small list of colors when the picture allows,

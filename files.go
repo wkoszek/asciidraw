@@ -63,6 +63,7 @@ type fileObject struct {
 	BG    string      `yaml:"bg,omitempty"`
 	Place string      `yaml:"place,omitempty"` // a label's position, like "top left"; none means centered
 	Layer string      `yaml:"layer,omitempty"` // 0-9, a-z or A-Z; none means 0
+	Heads string      `yaml:"heads,omitempty"` // an arrow's heads: start, both or none; none given means end
 }
 
 // fileAnchor is an attached line end: the shape's id, the side (left,
@@ -173,6 +174,9 @@ func encodeObjects(objs []object) []fileObject {
 			}
 			if hasValue[o.Kind] {
 				f.Value = ptr(o.Value)
+			}
+			if o.Kind == "arrow" && o.Heads > 0 && o.Heads < len(heads) {
+				f.Heads = heads[o.Heads].name
 			}
 		}
 		out = append(out, f)
@@ -328,6 +332,15 @@ func decodeObjects(fs []fileObject) ([]object, error) {
 				}
 				if hasLabel(f.Kind) {
 					o.HAlign, o.VAlign = h, v
+				}
+			}
+			if f.Heads != "" {
+				h := slices.IndexFunc(heads, func(h struct{ name, sample string }) bool { return h.name == f.Heads })
+				if h < 0 {
+					return nil, fmt.Errorf("object %d: unknown heads %q", i+1, f.Heads)
+				}
+				if f.Kind == "arrow" {
+					o.Heads = h
 				}
 			}
 			o.Value = val(f.Value)

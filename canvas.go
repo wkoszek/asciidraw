@@ -213,7 +213,7 @@ func drawBox(c *canvas, x0, y0, x1, y1 int, st boxStyle) {
 	x0, x1 = order(x0, x1)
 	y0, y1 = order(y0, y1)
 	if y0 == y1 || x0 == x1 {
-		drawPath(c, [][2]int{{x0, y0}, {x1, y1}}, st, false)
+		drawPath(c, [][2]int{{x0, y0}, {x1, y1}}, st, false, false)
 		return
 	}
 	for x := x0 + 1; x < x1; x++ {
@@ -233,7 +233,7 @@ func drawBox(c *canvas, x0, y0, x1, y1 int, st boxStyle) {
 // drawLine runs across row y0, then down or up column x1, with a corner
 // where the two meet. arrow puts a head on the end.
 func drawLine(c *canvas, x0, y0, x1, y1 int, st boxStyle, arrow bool) {
-	drawPath(c, [][2]int{{x0, y0}, {x1, y0}, {x1, y1}}, st, arrow)
+	drawPath(c, [][2]int{{x0, y0}, {x1, y0}, {x1, y1}}, st, false, arrow)
 }
 
 // drawOval draws the oval that fits the rectangle. The outline is one cell
